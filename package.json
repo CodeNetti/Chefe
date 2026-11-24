@@ -1,0 +1,20 @@
+{
+  "name": "dominio-do-chefe",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/",
+    "exemplo": "node scripts/criar-planilha-exemplo.js",
+    "empacotar": "powershell -ExecutionPolicy Bypass -File scripts/empacotar.ps1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Conferência automática de pedidos do WhatsApp contra planilha de produtos",
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "https://codeload.github.com/pedroslopez/whatsapp-web.js/tar.gz/38eb45b2759450cc6fccb6a7a3f2cbc3bdb87db2"
+  }
+}

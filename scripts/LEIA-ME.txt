@@ -1,0 +1,39 @@
+================================================================
+  DOMINIO DO CHEFE - Conferencia automatica de pedidos
+================================================================
+
+COMO INICIAR
+  1. Extraia esta pasta inteira em um lugar fixo do computador
+     (exemplo: Documentos). Nao rode de dentro do .zip.
+  2. De dois cliques em "iniciar.bat".
+  3. Digite a chave Pix para recebimento (ou aperte ENTER para
+     manter a ultima usada).
+  4. Na primeira vez aparece um QR Code. No celular, abra:
+     WhatsApp > Aparelhos conectados > Conectar aparelho
+     e escaneie o codigo.
+  5. Pronto. Deixe a janela aberta (pode minimizar).
+
+O GRUPO
+  O sistema monitora o grupo do WhatsApp chamado "Pedidos Teste".
+  O WhatsApp conectado precisa participar desse grupo.
+
+FORMATO DO PEDIDO NO GRUPO
+  Cliente: Nome do contato (igual esta salvo na agenda)
+  Pedido
+  2x - Alface - COD:2121 - R$80,00
+  3x - Tomate - COD:1010 - R$22,50
+  Total: R$102,50
+
+PRODUTOS E PRECOS
+  Edite o arquivo "produtos.xlsx" (colunas COD, Nome e Preco).
+  Pode editar com o sistema ligado.
+
+RELATORIO
+  Cada conferencia fica registrada na pasta "resultados"
+  (arquivo .csv que abre no Excel).
+
+PARA PARAR
+  Feche a janela.
+
+TROCAR DE WHATSAPP
+  Feche o sistema, apague a pasta ".sessao" e inicie de novo.

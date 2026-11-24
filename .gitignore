@@ -1,0 +1,7 @@
+node_modules/
+.sessao/
+.wwebjs_cache/
+estado/
+resultados/
+dist/
+config.json
