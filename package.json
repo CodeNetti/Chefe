@@ -6,7 +6,8 @@
     "start": "node src/index.js",
     "test": "node --test test/",
     "exemplo": "node scripts/criar-planilha-exemplo.js",
-    "empacotar": "powershell -ExecutionPolicy Bypass -File scripts/empacotar.ps1"
+    "empacotar": "powershell -ExecutionPolicy Bypass -File scripts/empacotar.ps1",
+    "assinante": "node scripts/assinantes.js"
   },
   "keywords": [],
   "author": "",

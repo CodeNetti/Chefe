@@ -18,6 +18,33 @@ A partir da versão 3, o sistema só funciona com um login (**usuário e senha**
 
 ---
 
+## Projeto atual: já configurado ✅
+
+O projeto **Chefe** (`chefe-a1566`) já está pronto. Foi configurado em 25/11/2026 pelo terminal:
+- Firestore em São Paulo (`southamerica-east1`) com as regras de [`firestore.rules`](firestore.rules) publicadas;
+- login por e-mail/senha ativado, **criação de contas por terceiros bloqueada** e exclusão de conta pelo próprio usuário bloqueada;
+- app Web registrado e [`src/firebase-config.js`](src/firebase-config.js) preenchido.
+
+Os passos 1 a 5 abaixo ficam como referência, caso um dia seja preciso montar outro projeto.
+
+## Gerenciar assinantes pelo terminal (recomendado)
+
+O script `scripts/assinantes.js` roda **só no seu computador** e não vai no pacote do cliente. Ele usa o seu login do Google Cloud SDK (`gcloud auth login`, com a conta dona do projeto) como administrador:
+
+```
+npm run assinante -- listar
+npm run assinante -- novo joao "Mercado do João"    (pede a senha 2x; cria e LIBERA)
+npm run assinante -- bloquear joao                   (acesso = 2)
+npm run assinante -- liberar joao                    (acesso = 1)
+npm run assinante -- senha joao                      (pede a senha nova)
+```
+
+A senha é digitada na hora (aparece `*****`) e não fica salva em lugar nenhum. Ao assinante você passa só o **usuário** (`joao`) e a **senha**.
+
+Se o comando disser que não conseguiu o acesso de administrador, faça o login de novo com `gcloud auth login`.
+
+As seções "Cadastrar", "Bloquear" e "Trocar a senha" mais abaixo mostram o jeito manual, pelo console, para quando você não estiver no seu computador.
+
 ## Passo a passo (uma vez só)
 
 ### 1. Criar o projeto
@@ -93,11 +120,13 @@ Em **Firestore Database → licencas → joao**, edite `acesso`:
 
 ## Trocar a senha de um assinante
 
-Como o e-mail técnico não recebe mensagens, o "redefinir senha" do Firebase não funciona. Faça assim:
+Pelo terminal: `npm run assinante -- senha joao`.
+
+Pelo console não dá para digitar uma senha nova, e o "redefinir senha" não funciona, porque o e-mail técnico não recebe mensagens. Pelo console, a saída é:
 1. **Authentication → Usuários →** `joao@chefe.local` **→ ⋮ → Excluir conta**.
 2. **Adicionar usuário** de novo com o mesmo `joao@chefe.local` e a senha nova.
 
-A licença (`licencas/joao`) continua valendo, porque ela é pelo usuário, não pela conta. Depois disso, o sistema pede login de novo no computador do assinante.
+A licença (`licencas/joao`) continua valendo, porque ela é pelo usuário, não pela conta. Depois de trocar a senha, o sistema do assinante pede login de novo.
 
 ## Mensagens que o assinante pode ver
 

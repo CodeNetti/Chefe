@@ -18,6 +18,7 @@ Desde a versão 3, o sistema só roda com **usuário e senha** de uma assinatura
 - **Ao abrir o `iniciar.bat`:** pede usuário e senha (a senha aparece como `*****`). Nas reinicializações automáticas, não pede de novo: usa a sessão salva em `estado/licenca.json`, que guarda um token do Firebase e nunca a senha.
 - **Com o sistema rodando:** a licença é conferida a cada 30 minutos. Se estiver bloqueada, o sistema para e o `iniciar.bat` não reinicia.
 - **Sem internet:** o sistema continua por até 24h desde a última verificação liberada.
+- **Assinantes:** gerenciados pelo terminal, só no seu computador: `npm run assinante -- listar | novo joao "Nome" | bloquear joao | liberar joao | senha joao`.
 
 ## Como funciona
 

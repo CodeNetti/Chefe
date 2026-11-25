@@ -5,8 +5,8 @@
 // LER a própria licença e ninguém consegue alterá-la pelo sistema (só você, pelo console).
 
 module.exports = {
-  apiKey: '', // Configurações do projeto > Geral > "Chave de API da Web"
-  projectId: '', // Configurações do projeto > Geral > "Código do projeto"
+  apiKey: 'AIzaSyDESH6k0EGl6PjD5AnhU1GXdplo000bzZs', // Configurações do projeto > Geral > "Chave de API da Web"
+  projectId: 'chefe-a1566', // Configurações do projeto > Geral > "Código do projeto"
 
   // O assinante entra com USUÁRIO e senha. O Firebase só aceita e-mail, então o sistema usa
   // "usuario@<dominioUsuarios>" por baixo (ex.: joao -> joao@chefe.local). Esse e-mail não existe

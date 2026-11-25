@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { criarLicenca } = require('./licenca');
+const { perguntarLinha, perguntarSenha } = require('./terminal');
 
 const RAIZ = path.resolve(__dirname, '..');
 const ARQ_CONFIG = path.join(RAIZ, 'config.json');
@@ -57,51 +58,6 @@ function banner() {
 
 function perguntar(rl, texto) {
   return new Promise((resolve) => rl.question(texto, (r) => resolve(r.trim())));
-}
-
-async function perguntarLinha(texto) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  const r = await perguntar(rl, texto);
-  rl.close();
-  return r;
-}
-
-/** Lê a senha sem mostrar o que é digitado (aparece * no lugar). */
-function perguntarSenha(texto) {
-  return new Promise((resolve) => {
-    const stdin = process.stdin;
-    process.stdout.write(texto);
-    stdin.setRawMode(true);
-    stdin.resume();
-    stdin.setEncoding('utf8');
-    let senha = '';
-    const aoDigitar = (pedaco) => {
-      for (const c of pedaco) {
-        if (c === '\r' || c === '\n') {
-          stdin.setRawMode(false);
-          stdin.pause();
-          stdin.removeListener('data', aoDigitar);
-          process.stdout.write('\n');
-          return resolve(senha);
-        }
-        if (c === '\u0003') {
-          process.stdout.write('\n');
-          process.exit(1); // Ctrl+C
-        }
-        if (c === '\b' || c === '\x7f') {
-          if (senha) {
-            senha = senha.slice(0, -1);
-            process.stdout.write('\b \b');
-          }
-          continue;
-        }
-        if (c < ' ') continue;
-        senha += c;
-        process.stdout.write('*');
-      }
-    };
-    stdin.on('data', aoDigitar);
-  });
 }
 
 /** Login do assinante. true = liberado. Até 3 tentativas de senha. */
