@@ -6,9 +6,18 @@ Confere automaticamente os pedidos postados em um grupo do WhatsApp contra a pla
 
 1. Vá em **[Releases](../../releases/latest)** e baixe o arquivo **`DominioDoChefe.zip`**. Ele já traz tudo, e não precisa instalar nada.
 2. Extraia a pasta em um lugar fixo do computador (ex.: Documentos).
-3. Abra o **`iniciar.bat`**, digite a sua chave Pix e escaneie o QR Code com o WhatsApp.
+3. Abra o **`iniciar.bat`**, entre com **usuário e senha** da assinatura, digite a sua chave Pix e escaneie o QR Code com o WhatsApp.
 
 > O botão verde **Code → Download ZIP** baixa só o código-fonte, sem o Node e o Chrome. Para usar o sistema, baixe pelo **Releases**.
+
+## Login e assinatura (Firebase)
+
+Desde a versão 3, o sistema só roda com **usuário e senha** de uma assinatura **liberada** no Firebase. Configuração, cadastro de assinantes e bloqueio estão em **[FIREBASE.md](FIREBASE.md)**.
+
+- **No Firebase fica só a permissão:** `licencas/{usuario}` com `acesso = 1` (liberado) ou `2` (bloqueado). Nenhum dado de pedido ou cliente vai para lá.
+- **Ao abrir o `iniciar.bat`:** pede usuário e senha (a senha aparece como `*****`). Nas reinicializações automáticas, não pede de novo: usa a sessão salva em `estado/licenca.json`, que guarda um token do Firebase e nunca a senha.
+- **Com o sistema rodando:** a licença é conferida a cada 30 minutos. Se estiver bloqueada, o sistema para e o `iniciar.bat` não reinicia.
+- **Sem internet:** o sistema continua por até 24h desde a última verificação liberada.
 
 ## Como funciona
 
@@ -95,7 +104,7 @@ npm install
 iniciar.bat
 ```
 
-1. Ao abrir, aparece a tela "CHEFE" e o sistema pergunta a chave Pix (ENTER mantém a atual). A resposta fica salva no `config.json`. Essa pergunta só aparece quando o `iniciar.bat` é aberto, não nas reinicializações automáticas.
+1. Ao abrir, aparece a tela "CHEFE", o login (usuário e senha, veja [FIREBASE.md](FIREBASE.md)) e a pergunta da chave Pix (ENTER mantém a atual). A resposta fica salva no `config.json`. Essa pergunta só aparece quando o `iniciar.bat` é aberto, não nas reinicializações automáticas.
 1. Na primeira vez, aparece um QR Code no terminal. No celular, abra **WhatsApp > Aparelhos conectados > Conectar aparelho** e escaneie. A sessão fica salva em `.sessao/`.
 2. O `iniciar.bat` reinicia o sistema automaticamente se ele cair ou se o WhatsApp desconectar.
 3. Os pedidos que chegarem com o sistema desligado são conferidos quando ele voltar. A busca vai até as últimas `historicoAoIniciar` mensagens.
@@ -129,7 +138,7 @@ Cada conferência fica registrada em `resultados/conferencias_AAAA-MM.csv`, que 
 npm run empacotar
 ```
 
-Gera `dist/DominioDoChefe.zip`, que já leva o Node (`runtime/`) e o Chrome (`chrome/`). O cliente só precisa extrair e abrir o `iniciar.bat`. O pacote **não** leva a sua sessão do WhatsApp (`.sessao/`), nem `estado/` e `resultados/`, e vai com a chave Pix vazia, para o cliente digitar a dele.
+Gera `dist/DominioDoChefe.zip`, que já leva o Node (`runtime/`) e o Chrome (`chrome/`). O cliente só precisa extrair e abrir o `iniciar.bat`. O pacote **não** leva a sua sessão do WhatsApp (`.sessao/`), nem `estado/` e `resultados/`, e vai com a chave Pix vazia, para o cliente digitar a dele. O `empacotar` se recusa a gerar o pacote se `src/firebase-config.js` não estiver preenchido.
 
 A `whatsapp-web.js` está instalada direto do GitHub (commit `38eb45b`, correção #201990), porque a versão 1.34.8 do npm não gera QR Code desde a mudança do WhatsApp Web de 23/11/2026. Quando sair uma versão nova no npm com essa correção, dá para voltar a instalar pelo npm.
 

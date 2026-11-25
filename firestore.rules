@@ -1,0 +1,20 @@
+rules_version = '2';
+
+// Regras do Firestore do Domínio do Chefe (veja FIREBASE.md, passo 4).
+// - A licença de cada assinante é licencas/{usuario} (ex.: licencas/joao).
+// - Só quem fez login como esse usuário (e-mail técnico joao@chefe.local) consegue LER.
+// - Ninguém altera nada pelo sistema. Quem libera/bloqueia é você, pelo console do Firebase
+//   (o console não passa por estas regras).
+// Se mudar "dominioUsuarios" em src/firebase-config.js, mude o '@chefe.local' abaixo também.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /licencas/{usuario} {
+      allow read: if request.auth != null && request.auth.token.email == usuario + '@chefe.local';
+      allow write: if false;
+    }
+    // Qualquer outra coleção: bloqueada
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+  }
+}

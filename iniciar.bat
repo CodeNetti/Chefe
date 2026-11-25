@@ -16,7 +16,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-rem Tela de abertura + chave Pix (so na abertura, nao nas reinicializacoes)
+rem Tela de abertura + login + chave Pix (so na abertura, nao nas reinicializacoes)
 "%NODE%" src\inicio.js
 if errorlevel 1 (
   pause
@@ -25,7 +25,17 @@ if errorlevel 1 (
 
 :loop
 "%NODE%" src\index.js
+rem Codigo 10 = licenca nao liberada: nao reinicia
+if %errorlevel% equ 10 goto bloqueado
 echo.
 echo Sistema parou. Reiniciando em 10 segundos... (feche a janela para parar)
 timeout /t 10 /nobreak >nul
 goto loop
+
+:bloqueado
+echo.
+echo  Acesso ao sistema nao liberado (veja o motivo acima).
+echo  Para entrar de novo, feche esta janela e abra o iniciar.bat.
+echo.
+pause
+exit /b 1

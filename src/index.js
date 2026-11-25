@@ -26,6 +26,7 @@ const M = require('./mensagens');
 const { log, normalizar, esperarAleatorio } = require('./util');
 const { comTimeout, listarGrupos, listarContatos } = require('./whatsapp');
 const T = require('./tratamento');
+const { criarLicenca, CODIGO_SAIDA_BLOQUEADO, INTERVALO_VERIFICACAO_MS } = require('./licenca');
 
 const RAIZ = path.resolve(__dirname, '..');
 const config = JSON.parse(fs.readFileSync(path.join(RAIZ, 'config.json'), 'utf8'));
@@ -481,5 +482,42 @@ process.on('SIGINT', async () => {
   }
 });
 
-log('🚀 Iniciando Domínio do Chefe...');
-client.initialize();
+// ---------- licença (Firebase) ----------
+
+const licenca = criarLicenca({ raiz: RAIZ });
+
+async function encerrarPorLicenca(motivo) {
+  log(`🔒 ${motivo}`);
+  log('🔒 Sistema parado: acesso não liberado.');
+  try {
+    await comTimeout(client.destroy(), 15000, 'fechar o WhatsApp');
+  } catch (e) {
+    /* já estava fechado */
+  }
+  process.exit(CODIGO_SAIDA_BLOQUEADO); // o iniciar.bat NÃO reinicia com este código
+}
+
+async function iniciar() {
+  log('🚀 Iniciando Domínio do Chefe...');
+  const r = await licenca.verificarSessao();
+  if (!r.ok) return encerrarPorLicenca(r.motivo);
+  if (r.aviso) log(`⚠️  ${r.aviso}`);
+  log(`🔓 Licença ativa (usuário ${r.usuario})`);
+
+  // Reconfere periodicamente: bloqueio feito no Firebase para o sistema em até 30 min
+  setInterval(
+    () =>
+      licenca
+        .verificarSessao()
+        .then((v) => {
+          if (!v.ok) return encerrarPorLicenca(v.motivo);
+          if (v.aviso) log(`⚠️  ${v.aviso}`);
+        })
+        .catch((e) => log('⚠️  Erro ao verificar a licença:', e.message)),
+    INTERVALO_VERIFICACAO_MS
+  );
+
+  client.initialize();
+}
+
+iniciar();

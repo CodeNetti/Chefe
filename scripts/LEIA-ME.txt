@@ -6,12 +6,21 @@ COMO INICIAR
   1. Extraia esta pasta inteira em um lugar fixo do computador
      (exemplo: Documentos). Nao rode de dentro do .zip.
   2. De dois cliques em "iniciar.bat".
-  3. Digite a chave Pix para recebimento (ou aperte ENTER para
+  3. Entre com o USUARIO e a SENHA da sua assinatura.
+     (A senha nao aparece enquanto voce digita: aparece *****.)
+  4. Digite a chave Pix para recebimento (ou aperte ENTER para
      manter a ultima usada).
-  4. Na primeira vez aparece um QR Code. No celular, abra:
+  5. Na primeira vez aparece um QR Code. No celular, abra:
      WhatsApp > Aparelhos conectados > Conectar aparelho
      e escaneie o codigo.
-  5. Pronto. Deixe a janela aberta (pode minimizar).
+  6. Pronto. Deixe a janela aberta (pode minimizar).
+
+ASSINATURA
+  O sistema precisa de internet para conferir a assinatura ao abrir
+  e a cada 30 minutos. Sem internet, ele continua funcionando por
+  ate 24 horas. Se a assinatura for bloqueada, o sistema para e
+  mostra o motivo. Depois de regularizar, abra o "iniciar.bat" de
+  novo e entre com usuario e senha.
 
 OS GRUPOS
   O WhatsApp conectado precisa participar destes dois grupos:

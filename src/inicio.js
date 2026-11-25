@@ -1,9 +1,11 @@
-// Tela de abertura: desenho "CHEFE" + pergunta da chave Pix.
+// Tela de abertura: desenho "CHEFE" + login do assinante (Firebase) + pergunta da chave Pix.
 // Roda UMA vez quando o iniciar.bat é aberto (não roda nas reinicializações automáticas).
+// Sai com código 1 (o iniciar.bat para) se o login falhar ou o acesso não estiver liberado.
 
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { criarLicenca } = require('./licenca');
 
 const RAIZ = path.resolve(__dirname, '..');
 const ARQ_CONFIG = path.join(RAIZ, 'config.json');
@@ -57,6 +59,84 @@ function perguntar(rl, texto) {
   return new Promise((resolve) => rl.question(texto, (r) => resolve(r.trim())));
 }
 
+async function perguntarLinha(texto) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const r = await perguntar(rl, texto);
+  rl.close();
+  return r;
+}
+
+/** Lê a senha sem mostrar o que é digitado (aparece * no lugar). */
+function perguntarSenha(texto) {
+  return new Promise((resolve) => {
+    const stdin = process.stdin;
+    process.stdout.write(texto);
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf8');
+    let senha = '';
+    const aoDigitar = (pedaco) => {
+      for (const c of pedaco) {
+        if (c === '\r' || c === '\n') {
+          stdin.setRawMode(false);
+          stdin.pause();
+          stdin.removeListener('data', aoDigitar);
+          process.stdout.write('\n');
+          return resolve(senha);
+        }
+        if (c === '\u0003') {
+          process.stdout.write('\n');
+          process.exit(1); // Ctrl+C
+        }
+        if (c === '\b' || c === '\x7f') {
+          if (senha) {
+            senha = senha.slice(0, -1);
+            process.stdout.write('\b \b');
+          }
+          continue;
+        }
+        if (c < ' ') continue;
+        senha += c;
+        process.stdout.write('*');
+      }
+    };
+    stdin.on('data', aoDigitar);
+  });
+}
+
+/** Login do assinante. true = liberado. Até 3 tentativas de senha. */
+async function fazerLogin() {
+  const licenca = criarLicenca({ raiz: RAIZ });
+  if (!licenca.configurado()) {
+    console.log(vermelho('  ❌ Firebase não configurado em src/firebase-config.js (veja FIREBASE.md).'));
+    return false;
+  }
+  console.log(`  ${ciano('🔐 Login do assinante')}`);
+  const salvo = licenca.lerSessao()?.usuario || '';
+  let usuario = '';
+  if (salvo) {
+    usuario = await perguntarLinha(`  ${ciano('➜')} Usuário ${cinza(`(ENTER para ${salvo})`)}: `);
+    if (!usuario) usuario = salvo;
+  }
+  while (!usuario) usuario = await perguntarLinha(`  ${ciano('➜')} Usuário: `);
+
+  for (let tentativa = 1; tentativa <= 3; tentativa++) {
+    const senha = await perguntarSenha(`  ${ciano('➜')} Senha: `);
+    process.stdout.write(cinza('  Verificando...'));
+    const r = await licenca.login(usuario, senha);
+    process.stdout.write('\r' + ' '.repeat(20) + '\r');
+    if (r.ok) {
+      console.log(verde(`  ✔ Acesso liberado para ${r.usuario}.`));
+      console.log('');
+      return true;
+    }
+    console.log(vermelho(`  ❌ ${r.motivo}`));
+    // Só vale tentar de novo quando o problema pode ser a senha
+    if (!/senha incorretos|Digite a senha/.test(r.motivo)) return false;
+  }
+  return false;
+}
+
 async function main() {
   banner();
 
@@ -82,7 +162,13 @@ async function main() {
   console.log('');
 
   // Sem teclado (ex.: rodando em segundo plano): segue com o que já está salvo
+  // (o index.js confere a licença salva e para se não estiver liberada)
   if (!process.stdin.isTTY) return;
+
+  if (!(await fazerLogin())) {
+    console.log('');
+    process.exit(1);
+  }
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const atual = String(config.chavePix ?? '').trim();
