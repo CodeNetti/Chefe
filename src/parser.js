@@ -26,6 +26,7 @@ const RE_PEDIDO = /^pedidos?\s*:?$/i;
 const RE_DESTINO = /^(?:enviar\s+para|mandar\s+para|destino)\s*:?\s*(.+)$/i;
 const RE_TOTAL = /^total(?:\s+geral)?\s*:?\s*(?:R\$)?\s*([\d.,]+)\s*$/i;
 const RE_ENTREGA = /^(?:entrega|local\s+de\s+entrega|delivery)\s*:\s*(.+)$/i;
+const RE_FRETE = /^(?:frete|taxa\s+de\s+entrega)\s*:?\s*(?:R\$)?\s*([\d.,]+)\s*$/i;
 
 // Quantidade + unidade opcional. O que vale para a conta é o número; a unidade só é exibida.
 //   "2x" "5g" "10m" "1,5kg" "3 un" "10 m" "3" (sem unidade = "x")
@@ -72,6 +73,7 @@ function parsePedido(texto) {
     totalInformado: null,
     destino: null,
     entrega: null,
+    frete: null,
     erros: [],
   };
 
@@ -87,6 +89,14 @@ function parsePedido(texto) {
     const mDestino = linha.match(RE_DESTINO);
     if (mDestino) {
       pedido.destino = mDestino[1].trim();
+      continue;
+    }
+
+    const mFrete = linha.match(RE_FRETE);
+    if (mFrete) {
+      const frete = paraCentavos(mFrete[1]);
+      if (frete === null) pedido.erros.push(`Frete ilegível: "${linha}"`);
+      else pedido.frete = frete;
       continue;
     }
 
@@ -142,4 +152,4 @@ function parsePedido(texto) {
   return pedido;
 }
 
-module.exports = { parsePedido, lerQuantidade, limparLinha, RE_COD };
+module.exports = { parsePedido, lerQuantidade, limparLinha, RE_COD, UNIDADES };

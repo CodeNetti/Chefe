@@ -45,7 +45,8 @@ Total: R$102,50
 
 - **1ª linha:** `Cliente:` seguido do nome **exatamente como está salvo na agenda** do WhatsApp (acentos e maiúsculas não importam).
 - **Valor de cada item:** é o total da linha (quantidade × preço unitário).
-- **Opcionais:** o nome do produto no item (a conferência usa só o COD), a linha `Pedido`, a linha `Entrega: ...` e a linha `Total`.
+- **Opcionais:** o nome do produto no item (a conferência usa só o COD), a linha `Pedido`, a linha `Entrega: ...`, a linha `Frete: R$...` e a linha `Total`.
+- **Frete:** com a linha `Frete: R$70,00`, o Total precisa ser itens + frete, e o frete aparece na mensagem ao cliente.
 - **Quantidade:** aceita qualquer unidade (`2x`, `5g`, `10m`, `1,5kg`, `3`). A conta usa só o número; a unidade aparece na mensagem ao cliente (`5g Queijo — R$ ...`).
 
 ## Grupo Tratamento de Texto (pedidos bagunçados)
@@ -63,10 +64,13 @@ total : 75+560+115=750                            Station Place1
 pickup/station
 ```
 
-- **Cliente:** `Alias: X`, `alias X`, `Cliente: X`, `Summary X`, um nome sozinho numa linha, ou `... para X` no fim de cada item (um cliente por linha).
-- **Itens:** quantidade + produto + valor opcional. O produto é achado pelo nome da planilha (aceita plural, erro de digitação e a coluna **Apelidos**) ou pelo COD.
-- **Valor ao lado do item:** pode ser o preço por unidade ou o total da linha; o sistema escolhe o que fecha com o Total.
-- **Entrega:** linhas com `station`, `delivery`, `entrega`, `pickup`... viram `Entrega:` no pedido.
+- **Cliente:** `Vulgo: X`, `Alias: X`, `Cliente: X`, `Resumo X`, `Summary X`, o rótulo sozinho com o nome na linha de baixo (`VULGO` / `Kelvão`), um nome sozinho numa linha, ou `... para X` no fim de cada item (um cliente por linha). Saudações (`Salve chefe bom dia!!`), `Pix` e emojis são ignorados.
+- **Itens:** quantidade + produto + valor opcional, com a quantidade antes ou depois do nome (`10g Produto X` ou `Produto X 10g`). O produto é achado pelo nome da planilha (aceita plural, erro de digitação e a coluna **Apelidos**) ou pelo COD.
+- **Sem quantidade:** `Alface = R$40,00` vira `1x Alface` (valor ÷ preço da planilha).
+- **Valor ao lado do item:** pode ser o preço por unidade ou o total da linha (separado por `-`, `=`, `:`, `>>>>`...); o sistema escolhe o que fecha com o Total.
+- **Tudo numa linha:** `Vulgo cond$  10g Produto X.  Total R$ 750,00` é separado em cliente, item e total.
+- **Entrega:** `Entrega: X`, `FORMA DE ENTREGA Lapa` e linhas com `station`, `delivery`, `retirada`, `pickup`... viram `Entrega:` no pedido.
+- **Frete:** `Motoca = 70,00`, `Frete: R$ 20,00` ou `FRETE: Motoca (Rua X)`. Com valor, vira a linha `Frete:` e entra no Total. `total R$ 2.925,00 + frete` é lido como o total sem o frete.
 - **Colagem de várias mensagens** (`[21:37, 24/11/2026] Fulano: ...`) vira um pedido por mensagem.
 - **Quando não entende** (produto desconhecido ou ambíguo, cliente faltando), pergunta no próprio grupo. **Responda citando a pergunta** (com uma só aberta, não precisa citar). `0` tira o item ou cancela o pedido.
 - **Aprende:** quando você diz qual produto era uma palavra desconhecida, ela vira apelido (`estado/apelidos.json`) e não é perguntada de novo.
@@ -79,7 +83,7 @@ Colunas opcionais:
 
 | Coluna | Para que serve |
 |---|---|
-| **A partir de** | Faixas de preço. Cada faixa é uma linha com o **mesmo Nome** e COD próprio. Vale a faixa de maior "A partir de" que caiba na quantidade. Ex.: `4010 · Produto X · 0 · 80` e `4020 · Produto X · 50 · 70` → até 49g usa 4010, a partir de 50g usa 4020. Na conferência, COD da faixa errada é apontado como erro. |
+| **A partir de** | Faixas de preço. Cada faixa é uma linha com o **mesmo Nome** e COD próprio. Aceita um número (`50` = a partir de 50) ou a faixa escrita: `<50 g`, `≥50 e <100 g`, `50 a 99`, `até 49`, `50+`. Ex.: `4010 · Produto X · <50 g · 75` e `4020 · Produto X · ≥50 e <100 g · 70` → até 49g usa 4010, de 50g a 99g usa 4020, e 100g ou mais fica fora das faixas (erro). A unidade escrita é só informativa: vale o número. Na conferência, COD da faixa errada é apontado como erro. |
 | **Apelidos** | Outros nomes do produto, separados por vírgula, usados no grupo Tratamento de Texto. |
 
 Para gerar uma planilha de exemplo, use `npm run exemplo`.
@@ -112,7 +116,7 @@ iniciar.bat
 | `mostrarNavegador` | `true` mostra a janela do Chrome, útil para depurar. |
 | `chromePath` | Caminho de um Chrome instalado. Se ficar vazio, usa o Chrome que vem com o sistema. |
 | `chavePix` | Chave Pix para recebimento, inserida em `{pix}`. |
-| `mensagemCliente` | Modelo da mensagem enviada ao cliente. Aceita `{cliente}`, `{itens}`, `{total}` e `{pix}`. |
+| `mensagemCliente` | Modelo da mensagem enviada ao cliente. Aceita `{cliente}`, `{itens}`, `{total}`, `{frete}` e `{pix}`. O frete, quando houver, já aparece no fim de `{itens}`. |
 | `modeloItem` | Modelo de cada item. Aceita `{qtd}` (já com a unidade: `2x`, `5g`), `{nome}`, `{unitario}` e `{valor}`. |
 
 ## Relatório

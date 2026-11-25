@@ -24,7 +24,7 @@ test('carrega planilha exemplo', async () => {
   await criar(arq);
   ({ produtos } = await lerPlanilha(arq));
   assert.strictEqual(produtos.size, 5);
-  assert.deepStrictEqual(produtos.get('2121'), { codigo: '2121', nome: 'Alface', preco: 4000, apartirDe: null, apelidos: ['alface crespa'] });
+  assert.deepStrictEqual(produtos.get('2121'), { codigo: '2121', nome: 'Alface', preco: 4000, apartirDe: null, ate: null, apelidos: ['alface crespa'] });
   assert.strictEqual(produtos.get('3030').preco, 525);
   assert.strictEqual(produtos.get('4020').apartirDe, 50);
 });

@@ -28,7 +28,7 @@ function conferir(pedido, produtos, opcoes = {}) {
     const qtdTexto = formatarQtdUnidade(item.quantidade, item.unidade);
     const faixa = faixaPara(produtos, informado, item.quantidade);
     if (!faixa) {
-      erros.push(`${qtdTexto} de ${informado.nome}: quantidade abaixo da menor faixa da planilha`);
+      erros.push(`${qtdTexto} de ${informado.nome}: quantidade fora das faixas da planilha (coluna "A partir de")`);
       continue;
     }
     const produto = faixa;
@@ -58,11 +58,16 @@ function conferir(pedido, produtos, opcoes = {}) {
     });
   }
 
+  // O Total do pedido inclui o frete (linha "Frete: R$..."), quando houver
+  const frete = pedido.frete ?? null;
+  const subtotal = totalCalculado;
+  totalCalculado += frete ?? 0;
+
   if (pedido.totalInformado === null) {
     if (opcoes.exigirTotal) erros.push('Linha "Total: R$..." ausente');
   } else if (Math.abs(pedido.totalInformado - totalCalculado) > tolerancia && erros.length === 0) {
     erros.push(
-      `Total informado ${formatarReais(pedido.totalInformado)}, soma correta dos itens ${formatarReais(totalCalculado)}`
+      `Total informado ${formatarReais(pedido.totalInformado)}, soma correta dos itens${frete ? ' + frete' : ''} ${formatarReais(totalCalculado)}`
     );
   }
 
@@ -71,6 +76,8 @@ function conferir(pedido, produtos, opcoes = {}) {
     cliente: pedido.cliente,
     entrega: pedido.entrega ?? null,
     itens,
+    subtotal,
+    frete,
     total: totalCalculado,
     erros,
   };

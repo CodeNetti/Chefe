@@ -12,16 +12,16 @@ function aplicarModelo(modelo, vars) {
 function listaItens(resultado, modeloItem) {
   // {qtd} já traz a unidade ("2x", "5g"); modelos antigos usavam "{qtd}x"
   const modelo = String(modeloItem).replace(/\{qtd\}x/g, '{qtd}');
-  return resultado.itens
-    .map((i) =>
-      aplicarModelo(modelo, {
-        qtd: formatarQtdUnidade(i.quantidade, i.unidade),
-        nome: i.nome,
-        unitario: formatarReais(i.precoUnitario),
-        valor: formatarReais(i.valor),
-      })
-    )
-    .join('\n');
+  const linhas = resultado.itens.map((i) =>
+    aplicarModelo(modelo, {
+      qtd: formatarQtdUnidade(i.quantidade, i.unidade),
+      nome: i.nome,
+      unitario: formatarReais(i.precoUnitario),
+      valor: formatarReais(i.valor),
+    })
+  );
+  if (resultado.frete) linhas.push(`Frete — ${formatarReais(resultado.frete)}`);
+  return linhas.join('\n');
 }
 
 function mensagemCliente(resultado, config) {
@@ -29,6 +29,7 @@ function mensagemCliente(resultado, config) {
     cliente: resultado.cliente,
     itens: listaItens(resultado, config.modeloItem),
     total: formatarReais(resultado.total),
+    frete: resultado.frete ? formatarReais(resultado.frete) : '',
     pix: config.chavePix ?? '',
   });
 }
@@ -55,6 +56,7 @@ function mensagemControleGrupo(resultado, destino) {
       (i) =>
         `${formatarQtdUnidade(i.quantidade, i.unidade)} ${i.nome} (${formatarReais(i.precoUnitario)} un.) — ${formatarReais(i.valor)}`
     ),
+    ...(resultado.frete ? [`Frete — ${formatarReais(resultado.frete)}`] : []),
     '',
     `*Total: ${formatarReais(resultado.total)}*`,
   ].join('\n');

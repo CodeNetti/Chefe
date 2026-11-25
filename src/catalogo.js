@@ -45,11 +45,37 @@ function identificarColunas(row) {
   return colunas.codigo && colunas.nome && colunas.preco ? colunas : null;
 }
 
-/** "50" | 50 | "50g" | "" -> 50 | null (aceita 0). */
-function lerMinimo(v) {
-  if (v === null || v === undefined || String(v).trim() === '') return null;
-  const m = String(v).replace(',', '.').match(/\d+(?:\.\d+)?/);
-  return m ? Number(m[0]) : null;
+/**
+ * Lê a célula "A partir de" como faixa { apartirDe, ate } (ate = { valor, inclusivo } | null).
+ *   50 | "50" | "50g" | "50+" | "a partir de 50" -> a partir de 50, sem limite
+ *   "<50 g" | "até 49" | "menos de 50"            -> de 0 até 50 (exclusivo) / 49 (inclusivo)
+ *   "≥50 e <100 g" | "50 a 99" | "de 50 até 99"   -> de 50 até 100 (exclusivo) / 99 (inclusivo)
+ *   "" -> sem faixa. Texto sem número -> null (aviso na leitura).
+ */
+function lerFaixa(v) {
+  const vazia = { apartirDe: null, ate: null };
+  if (v === null || v === undefined || String(v).trim() === '') return vazia;
+  if (typeof v === 'number') return { apartirDe: v, ate: null };
+  const s = normalizar(v).replace(/(\d),(\d)/g, '$1.$2');
+  const faixa = { ...vazia };
+  let anterior = 0;
+  let achou = false;
+  for (const m of s.matchAll(/\d+(?:\.\d+)?/g)) {
+    const n = Number(m[0]);
+    const op = s.slice(anterior, m.index);
+    anterior = m.index + m[0].length;
+    achou = true;
+    if (/[<≤]|\bate\b|menos|abaixo|max/.test(op)) {
+      faixa.ate = { valor: n, inclusivo: /≤|<=|=<|\bate\b|max/.test(op) }; // limite de cima
+    } else if (/[>≥]|acima|mais|partir|min/.test(op) || faixa.apartirDe === null) {
+      faixa.apartirDe = n; // limite de baixo (ou o 1º número sem sinal)
+    } else if (!faixa.ate) {
+      faixa.ate = { valor: n, inclusivo: true }; // 2º número sem sinal: "50 a 99", "50-99"
+    }
+  }
+  if (!achou) return null;
+  if (faixa.apartirDe === null && faixa.ate) faixa.apartirDe = 0;
+  return faixa;
 }
 
 async function lerPlanilha(caminho) {
@@ -88,14 +114,18 @@ async function lerPlanilha(caminho) {
       continue;
     }
     if (produtos.has(codigo)) avisos.push(`Linha ${r}: COD ${codigo} duplicado (vale a última linha)`);
-    const apartirDe = colunas.apartirDe ? lerMinimo(valorCelula(row.getCell(colunas.apartirDe))) : null;
+    let faixa = colunas.apartirDe ? lerFaixa(valorCelula(row.getCell(colunas.apartirDe))) : { apartirDe: null, ate: null };
+    if (!faixa) {
+      avisos.push(`Linha ${r}: "A partir de" sem número para COD ${codigo} (faixa ignorada)`);
+      faixa = { apartirDe: null, ate: null };
+    }
     const apelidos = colunas.apelidos
       ? String(valorCelula(row.getCell(colunas.apelidos)) ?? '')
           .split(/[,;\n]/)
           .map((a) => a.trim())
           .filter(Boolean)
       : [];
-    produtos.set(codigo, { codigo, nome: nome || `COD ${codigo}`, preco, apartirDe, apelidos });
+    produtos.set(codigo, { codigo, nome: nome || `COD ${codigo}`, preco, apartirDe: faixa.apartirDe, ate: faixa.ate, apelidos });
   }
   return { produtos, avisos };
 }
@@ -109,14 +139,14 @@ function faixasDe(produtos, nome) {
 /**
  * Faixa certa de um produto para a quantidade.
  * Sem coluna "A partir de" preenchida para esse nome -> o próprio produto.
- * Quantidade abaixo de todas as faixas -> null.
+ * Quantidade fora de todas as faixas -> null.
  */
 function faixaPara(produtos, produto, quantidade) {
   const irmaos = faixasDe(produtos, produto.nome);
-  if (!irmaos.some((p) => p.apartirDe !== null && p.apartirDe !== undefined)) return produto;
-  const validas = irmaos
-    .filter((p) => (p.apartirDe ?? 0) <= quantidade)
-    .sort((a, b) => (b.apartirDe ?? 0) - (a.apartirDe ?? 0));
+  if (!irmaos.some((p) => (p.apartirDe ?? null) !== null || p.ate)) return produto;
+  const cabe = (p) =>
+    (p.apartirDe ?? 0) <= quantidade && (!p.ate || (p.ate.inclusivo ? quantidade <= p.ate.valor : quantidade < p.ate.valor));
+  const validas = irmaos.filter(cabe).sort((a, b) => (b.apartirDe ?? 0) - (a.apartirDe ?? 0));
   return validas[0] ?? null;
 }
 
@@ -141,4 +171,4 @@ class Catalogo {
   }
 }
 
-module.exports = { Catalogo, lerPlanilha, faixasDe, faixaPara };
+module.exports = { Catalogo, lerPlanilha, lerFaixa, faixasDe, faixaPara };

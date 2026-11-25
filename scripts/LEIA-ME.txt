@@ -28,23 +28,32 @@ FORMATO DO PEDIDO NO GRUPO "Pedidos Teste"
   2x - Alface - COD:2121 - R$80,00
   5g - Produto X - COD:4010 - R$400,00
   Entrega: Estacao Central
-  Total: R$480,00
+  Frete: R$20,00
+  Total: R$500,00
 
   A quantidade aceita qualquer unidade (2x, 5g, 10m, 1,5kg).
+  A linha "Frete" e opcional; com ela, o Total e itens + frete.
 
-EXEMPLO PARA O GRUPO "Tratamento de Texto"
-  Alias: Maria
-  2 alface
-  60g Produto X
-  delivery: Estacao Central
+EXEMPLOS PARA O GRUPO "Tratamento de Texto"
+  Vulgo: Maria              VULGO
+  2 alface                  Kelvao
+  60g Produto X             Cebola 1g - R$ 525,00
+  delivery: Estacao Central VALOR TOTAL R$ 525,00
+                            FORMA DE ENTREGA Lapa
+
+  Tambem entende: "Alface = R$40,00" (sem quantidade),
+  "Motoca = 70,00" (frete), "total R$ 100,00 + frete",
+  e tudo numa linha so: "Vulgo Ana  10g Produto X.  Total R$ 750,00".
 
 PRODUTOS E PRECOS
   Edite o arquivo "produtos.xlsx" (colunas COD, Nome e Preco).
   Pode editar com o sistema ligado.
   Colunas opcionais:
   - "A partir de": faixa de preco. Repita o produto com o MESMO
-    nome e outro COD. Ex.: Produto X, a partir de 0 = 80 (COD 4010);
-    Produto X, a partir de 50 = 70 (COD 4020).
+    nome e outro COD. Pode escrever so o numero (50) ou a faixa:
+    "<50 g", ">=50 e <100 g", "50 a 99", "ate 49", "50+".
+    Ex.: Produto X, <50 g = 75 (COD 4010);
+         Produto X, >=50 e <100 g = 70 (COD 4020).
   - "Apelidos": outros nomes do produto, separados por virgula.
 
 RELATORIO

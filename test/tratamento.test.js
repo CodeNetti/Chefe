@@ -162,3 +162,119 @@ test('respostas curtas não parecem item; itens parecem', () => {
   assert.strictEqual(T.pareceItem('Ana Paula'), false);
   assert.strictEqual(T.pareceItem('3 tomate para Ana'), true);
 });
+
+// ---------- mensagens reais (24/11/2026) ----------
+
+// Igual à produtos.xlsx: faixas escritas como texto ("<50 g", "≥50 e <100 g")
+const { lerFaixa } = require('../src/catalogo');
+const real = new Map(
+  [
+    ['2121', 'Alface', 40, ''],
+    ['1010', 'Tomate', 75, ''],
+    ['3030', 'Cebola', 525, ''],
+    ['4010', 'Produto X', 75, '<50 g'],
+    ['4020', 'Produto X', 70, '≥50 e <100 g'],
+  ].map(([codigo, nome, preco, faixa]) => [codigo, { codigo, nome, preco: preco * 100, ...lerFaixa(faixa), apelidos: [] }])
+);
+
+/** Interpreta sem pendências, monta e confere. Devolve { texto, conf } do único pedido. */
+function montarReal(texto) {
+  const rs = T.interpretarTudo(texto, real);
+  assert.strictEqual(rs.length, 1, 'esperava 1 pedido');
+  assert.strictEqual(T.proximaPendencia(rs[0]), null, JSON.stringify(T.proximaPendencia(rs[0])));
+  const [p] = T.montarPedidos(rs[0], real);
+  return { texto: p.texto, conf: conferir(parsePedido(p.texto), real, {}) };
+}
+
+test('faixa escrita como texto na planilha', () => {
+  assert.deepStrictEqual(lerFaixa('<50 g'), { apartirDe: 0, ate: { valor: 50, inclusivo: false } });
+  assert.deepStrictEqual(lerFaixa('≥50 e <100 g'), { apartirDe: 50, ate: { valor: 100, inclusivo: false } });
+  assert.deepStrictEqual(lerFaixa('50 a 99'), { apartirDe: 50, ate: { valor: 99, inclusivo: true } });
+  assert.deepStrictEqual(lerFaixa('até 49'), { apartirDe: 0, ate: { valor: 49, inclusivo: true } });
+  assert.deepStrictEqual(lerFaixa('50+'), { apartirDe: 50, ate: null });
+  assert.deepStrictEqual(lerFaixa(50), { apartirDe: 50, ate: null });
+  assert.deepStrictEqual(lerFaixa(''), { apartirDe: null, ate: null });
+  assert.strictEqual(lerFaixa('abc'), null);
+  // 60g cai na 2ª faixa; 120g fica fora de todas
+  assert.match(montarReal('Vulgo: Ana\n60g Produto X').texto, /COD:4020 - R\$ 4\.200,00/);
+  assert.match(conferir(parsePedido('Cliente: Ana\n120g - Produto X - COD:4020 - R$8.400'), real, {}).erros[0], /fora das faixas/);
+});
+
+test('real 1: saudação ignorada, produto = valor sem quantidade, frete Motoca', () => {
+  const { texto, conf } = montarReal(
+    'Salve chefe bom dia!!\nIrmão vou adiantar o resumo, pra derrepente já liberar hoje, dentro do possível\n\nVenec\nAlface = R$40,00\nTomate = R$ 75,00\nMotoca = 70,00\nTotal 185,00'
+  );
+  assert.match(texto, /^Cliente: Venec/);
+  assert.match(texto, /1x - Alface - COD:2121 - R\$ 40,00/);
+  assert.match(texto, /Entrega: Motoca\nFrete: R\$ 70,00\nTotal: R\$ 185,00/);
+  assert.ok(conf.ok, conf.erros.join(' | '));
+  assert.strictEqual(conf.frete, 7000);
+});
+
+test('real 2: RESUMO + nome com emoji + Retirada', () => {
+  const { texto, conf } = montarReal('RESUMO\nINK ✅\n2x Tomate\n2x Cebola\n1x Produto X\n\nRetirada');
+  assert.match(texto, /^Cliente: INK\n/);
+  assert.match(texto, /1x - Produto X - COD:4010/);
+  assert.match(texto, /Entrega: Retirada/);
+  assert.ok(conf.ok);
+});
+
+test('real 3: tudo numa linha (Vulgo cond$  10g Produto X.  Total)', () => {
+  for (const msg of ['Resumo:\n\nVulgo cond$  10g Produto X.  Total R$ 750,00', 'Vulgo cond$ 10g Produto X. Total R$ 750,00']) {
+    const { texto, conf } = montarReal(msg);
+    assert.match(texto, /^Cliente: cond\$\n/);
+    assert.match(texto, /10g - Produto X - COD:4010 - R\$ 750,00/);
+    assert.ok(conf.ok);
+  }
+});
+
+test('real 4 e 8: preço diferente da planilha é apontado na conferência', () => {
+  const m4 = montarReal('Resumo:\n\nVeríticos\n\n20g Produto X = R$ 1.400,00\n\nTotal: R$ 1.400,00');
+  assert.match(m4.texto, /^Cliente: Veríticos/);
+  assert.match(m4.conf.erros[0], /correto R\$ 1\.500,00/);
+  const m8 = montarReal('resumo\nvulgo:gusta\npedido\n\n28g Produto X >>>> R$ 1.960,00\n6g Cebola >>>> R$ 3.150,00\n\ntotal: R$ 5.110,00');
+  assert.match(m8.texto, /^Cliente: gusta/);
+  assert.match(m8.texto, /6g - Cebola - COD:3030 - R\$ 3\.150,00/);
+  assert.match(m8.conf.erros[0], /28g Produto X: informado R\$ 1\.960,00, correto R\$ 2\.100,00/);
+});
+
+test('real 5, 6, 9, 10: Resumo Nome, Vulgo: Nome, pedido: ... de, Pix ignorado', () => {
+  const casos = [
+    ['Resumo Peach\n\n20g - Tomate\n\nTotal: R$ 1.500,00', 'Peach'],
+    ['Vulgo: sgobi\n\n5g Produto X = R$ 375,00\n\nTotal: R$ 375,00', 'sgobi'],
+    ['vulgo:manu\npedido: 15g de Produto X\nvalor: R$ 1.125,00\nentrega: estação lapa', 'manu'],
+    ['VB\n\n4g Produto X - R$ 300,00\n\nTotal R$ 300,00\nPix', 'VB'],
+  ];
+  for (const [msg, cliente] of casos) {
+    const { texto, conf } = montarReal(msg);
+    assert.match(texto, new RegExp(`^Cliente: ${cliente}\n`));
+    assert.ok(conf.ok, `${texto}\n-> ${conf.erros.join(' | ')}`);
+  }
+  assert.match(montarReal(casos[2][0]).texto, /Entrega: estação lapa/);
+});
+
+test('real 7: FRETE com endereço e "total ... + frete"', () => {
+  const { texto, conf } = montarReal(
+    'Vulgo: Tazz\n20g Tomate: R$ 1.500,00\n5g Produto X: R$ 375,00\n2g Cebola: R$ 1.050,00\n\nFRETE: Motoca (Rua guiará 325)\n\ntotal R$ 2.925,00 + frete'
+  );
+  assert.match(texto, /Entrega: Motoca \(Rua guiará 325\)/);
+  assert.doesNotMatch(texto, /Frete:/); // valor do frete não informado
+  assert.match(texto, /Total: R\$ 2\.925,00/);
+  assert.ok(conf.ok);
+  // Com o valor do frete informado, o total passa a incluí-lo
+  const com = montarReal('Vulgo: Tazz\n20g Tomate: R$ 1.500,00\nFrete: R$ 20,00\ntotal R$ 1.500,00 + frete');
+  assert.match(com.texto, /Frete: R\$ 20,00\nTotal: R\$ 1\.520,00/);
+  assert.ok(com.conf.ok);
+});
+
+test('real 11: VULGO e FORMA DE ENTREGA com o valor na linha de baixo / sem dois-pontos, quantidade depois do nome', () => {
+  const { texto, conf } = montarReal(
+    'VULGO\nKelvão\n\nPEDIDO\nCebola 1g - R$ 525,00\nTomate 2g − R$ 150,00\n\nVALOR TOTAL R$ 675,00\nFORMA DE ENTREGA Lapa'
+  );
+  assert.match(texto, /^Cliente: Kelvão\n/);
+  assert.match(texto, /1g - Cebola - COD:3030 - R\$ 525,00\n2g - Tomate - COD:1010 - R\$ 150,00/);
+  assert.match(texto, /Entrega: Lapa\n/);
+  assert.ok(conf.ok);
+  // Rótulo de entrega sozinho na linha
+  assert.match(montarReal('Vulgo: Ana\n2x Tomate\nFORMA DE ENTREGA\nLapa').texto, /Entrega: Lapa/);
+});
