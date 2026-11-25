@@ -67,7 +67,7 @@ async function fazerLogin() {
     console.log(vermelho('  ❌ Firebase não configurado em src/firebase-config.js (veja FIREBASE.md).'));
     return false;
   }
-  console.log(`  ${ciano('🔐 Login do assinante')}`);
+  console.log(`  ${ciano('🔐 Login')}`);
   const salvo = licenca.lerSessao()?.usuario || '';
   let usuario = '';
   if (salvo) {
@@ -112,10 +112,6 @@ async function main() {
     fs.writeFileSync(ARQ_CONFIG, JSON.stringify(config, null, 2) + '\n');
   }
 
-  console.log(`  ${cinza('Grupo de pedidos:')}    ${amarelo(config.grupo)}`);
-  console.log(`  ${cinza('Grupo de tratamento:')} ${config.grupoTratamento ? amarelo(config.grupoTratamento) : cinza('(desligado)')}`);
-  console.log(`  ${cinza('Planilha:')}            ${amarelo(config.planilhaProdutos)}`);
-  console.log('');
 
   // Sem teclado (ex.: rodando em segundo plano): segue com o que já está salvo
   // (o index.js confere a licença salva e para se não estiver liberada)
