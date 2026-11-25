@@ -278,3 +278,21 @@ test('real 11: VULGO e FORMA DE ENTREGA com o valor na linha de baixo / sem dois
   // Rótulo de entrega sozinho na linha
   assert.match(montarReal('Vulgo: Ana\n2x Tomate\nFORMA DE ENTREGA\nLapa').texto, /Entrega: Lapa/);
 });
+
+// ---------- bug de 25/11/2026: confirmação relida após reiniciar virava pedido repetido ----------
+
+test('mensagens do próprio sistema são reconhecidas (e pedidos normais não)', () => {
+  const M = require('../src/mensagens');
+  const conf = M.mensagemConfirmacaoTratamento([{ texto: 'Cliente: Ana\nPedido\n4g - Produto X - COD:4010 - R$ 300,00' }]);
+  assert.ok(M.ehMensagemDoSistema(conf));
+  const pergunta = M.mensagemPerguntaTratamento(
+    { itens: [{ termo: 'xyz', linha: '1 xyz', opcoes: [] }] },
+    { tipo: 'produto', i: 0, opcoes: [] }
+  );
+  assert.ok(M.ehMensagemDoSistema(pergunta));
+  assert.ok(M.ehMensagemDoSistema(M.mensagemErroGrupo({ cliente: 'Ana', erros: ['x'] })));
+  assert.ok(M.ehMensagemDoSistema('🚫 Nada para enviar: todos os itens foram retirados.'));
+  for (const pedido of ['Cliente: Ana\n2x - Alface - COD:2121 - R$80', 'Vulgo: Ana\n2 alface', 'RESUMO\nINK ✅\n2x Tomate']) {
+    assert.strictEqual(M.ehMensagemDoSistema(pedido), false, pedido);
+  }
+});

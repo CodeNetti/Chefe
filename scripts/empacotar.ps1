@@ -15,6 +15,11 @@ function Copiar-Pasta($origem, $destino) {
   if ($LASTEXITCODE -ge 8) { throw "Falha ao copiar $origem" }
 }
 
+Push-Location $raiz
+$fbOk = node -e "const c=require('./src/firebase-config');process.stdout.write(c.apiKey&&c.projectId?'1':'0')"
+Pop-Location
+if ($fbOk -ne '1') { throw 'Firebase nao configurado em src/firebase-config.js (veja FIREBASE.md). O pacote nao foi gerado.' }
+
 Write-Host "Limpando dist\..."
 if (Test-Path $pasta) { Remove-Item $pasta -Recurse -Force }
 if (Test-Path $zip) { Remove-Item $zip -Force }

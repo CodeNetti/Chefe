@@ -1,12 +1,13 @@
 {
   "name": "dominio-do-chefe",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "test": "node --test test/",
     "exemplo": "node scripts/criar-planilha-exemplo.js",
-    "empacotar": "powershell -ExecutionPolicy Bypass -File scripts/empacotar.ps1"
+    "empacotar": "powershell -ExecutionPolicy Bypass -File scripts/empacotar.ps1",
+    "assinante": "node scripts/assinantes.js"
   },
   "keywords": [],
   "author": "",
