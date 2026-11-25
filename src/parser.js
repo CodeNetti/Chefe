@@ -25,13 +25,35 @@ const RE_CLIENTE = /^cliente\s*:?\s*(.+)$/i;
 const RE_PEDIDO = /^pedidos?\s*:?$/i;
 const RE_DESTINO = /^(?:enviar\s+para|mandar\s+para|destino)\s*:?\s*(.+)$/i;
 const RE_TOTAL = /^total(?:\s+geral)?\s*:?\s*(?:R\$)?\s*([\d.,]+)\s*$/i;
-const RE_ITEM_INICIO = /^(\d+(?:[.,]\d+)?)\s*(?:x|un|und|unid)\b\s*-?\s*(.*)$/i;
+const RE_ENTREGA = /^(?:entrega|local\s+de\s+entrega|delivery)\s*:\s*(.+)$/i;
+
+// Quantidade + unidade opcional. O que vale para a conta é o número; a unidade só é exibida.
+//   "2x" "5g" "10m" "1,5kg" "3 un" "10 m" "3" (sem unidade = "x")
+// Unidade colada no número pode ser qualquer palavra curta; separada por espaço, só as conhecidas
+// (senão "2 Uva" leria "Uva" como unidade).
+const UNIDADES = 'x|un|und|unid|unidades?|g|gr|grs|gramas?|kg|kgs|mg|m|cm|mm|ml|l|lt|lts|litros?|cx|caixas?|pct|pcts|pacotes?|pc|pcs|dz|duzias?';
+const FIM_UNIDADE = '(?=[\\s\\-–—.:/,]|$)';
+const RE_ITEM_INICIO = new RegExp(
+  `^(\\d+(?:[.,]\\d+)?)(?:(${UNIDADES}|[a-zµ]{1,5})${FIM_UNIDADE}|\\s+(${UNIDADES})${FIM_UNIDADE})?\\.?\\s*(?:[-–—]\\s*)?(.*)$`,
+  'i'
+);
+
+/** "5g Queijo" -> { quantidade: 5, unidade: "g", resto: "Queijo" } | null */
+function lerQuantidade(linha) {
+  const m = String(linha).match(RE_ITEM_INICIO);
+  if (!m) return null;
+  return {
+    quantidade: paraQuantidade(m[1]),
+    unidade: (m[2] || m[3] || 'x').toLowerCase(),
+    resto: m[4].trim(),
+  };
+}
 const RE_COD = /\bcod(?:igo)?\s*[:.]?\s*([A-Za-z0-9]+)/i;
 const RE_VALOR = /R\$\s*([\d.,]+)\s*$/i;
 
-/** Remove marcações de formatação do WhatsApp (*negrito*, _itálico_, ~riscado~). */
+/** Remove marcações de formatação do WhatsApp (*negrito*, _itálico_, ~riscado~) e padroniza traços. */
 function limparLinha(linha) {
-  return linha.replace(/[*_~`]/g, '').trim();
+  return linha.replace(/[*_~`]/g, '').replace(/[−‐‑]/g, '-').trim();
 }
 
 function parsePedido(texto) {
@@ -49,11 +71,18 @@ function parsePedido(texto) {
     itens: [],
     totalInformado: null,
     destino: null,
+    entrega: null,
     erros: [],
   };
 
   for (const linha of linhas.slice(1)) {
     if (RE_PEDIDO.test(linha)) continue;
+
+    const mEntrega = linha.match(RE_ENTREGA);
+    if (mEntrega) {
+      pedido.entrega = mEntrega[1].trim();
+      continue;
+    }
 
     const mDestino = linha.match(RE_DESTINO);
     if (mDestino) {
@@ -69,10 +98,10 @@ function parsePedido(texto) {
       continue;
     }
 
-    const mItem = linha.match(RE_ITEM_INICIO);
+    const mItem = lerQuantidade(linha);
     if (mItem) {
-      const qtd = paraQuantidade(mItem[1]);
-      const resto = mItem[2];
+      const qtd = mItem.quantidade;
+      const resto = mItem.resto;
       const mCod = resto.match(RE_COD);
       const mValor = resto.match(RE_VALOR);
       const problemas = [];
@@ -96,6 +125,7 @@ function parsePedido(texto) {
       pedido.itens.push({
         linha,
         quantidade: qtd,
+        unidade: mItem.unidade,
         codigo: mCod[1],
         nomeInformado,
         valorInformado: valor,
@@ -112,4 +142,4 @@ function parsePedido(texto) {
   return pedido;
 }
 
-module.exports = { parsePedido };
+module.exports = { parsePedido, lerQuantidade, limparLinha, RE_COD };

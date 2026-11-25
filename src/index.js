@@ -7,7 +7,10 @@
 //  4. Tudo certo  -> envia o pedido (sem os códigos) ao contato do cliente,
 //                    reage ✅ na mensagem original e posta a cópia de controle no grupo.
 //     Algo errado -> reage ❌ e responde no grupo com os erros. NÃO envia ao cliente.
-//     Conferido mas contato não encontrado -> reage ⚠️ e avisa no grupo.
+//     Conferido mas contato não encontrado -> reage ❓ e pergunta no grupo para quem enviar.
+//  5. Grupo Tratamento de Texto (config.grupoTratamento, opcional): recebe pedidos bagunçados,
+//     monta no formato certo (src/tratamento.js), pergunta o que não entender e posta no grupo
+//     de pedidos, onde o passo 3 confere normalmente.
 
 const path = require('path');
 const fs = require('fs');
@@ -21,15 +24,21 @@ const { resolverDestino, contatoPorNumero, formatarTelefone } = require('./conta
 const { Registro } = require('./registro');
 const M = require('./mensagens');
 const { log, normalizar, esperarAleatorio } = require('./util');
-const { comTimeout, listarGrupos } = require('./whatsapp');
+const { comTimeout, listarGrupos, listarContatos } = require('./whatsapp');
+const T = require('./tratamento');
 
 const RAIZ = path.resolve(__dirname, '..');
 const config = JSON.parse(fs.readFileSync(path.join(RAIZ, 'config.json'), 'utf8'));
 const catalogo = new Catalogo(path.resolve(RAIZ, config.planilhaProdutos));
 const registro = new Registro(RAIZ);
 
-let grupoId = null;
+let grupoId = null; // grupo de pedidos
+let grupoTratamentoId = null; // grupo Tratamento de Texto (opcional)
 const enviadosPeloSistema = new Set();
+
+// Perguntas do Tratamento de Texto aguardando resposta.
+// chave = ID da mensagem de pergunta -> { original, rascunhos, r, pend } (só em memória)
+const pendentesTratamento = new Map();
 
 // Perguntas "para quem envio?" aguardando resposta no grupo.
 // chave = ID da mensagem de pergunta -> { original, resultado, opcoes }
@@ -110,9 +119,10 @@ client.on('ready', () =>
 
     // A lista de conversas pode demorar alguns segundos para carregar após conectar
     let grupos = [];
+    const acharGrupo = (nome) => grupos.filter((g) => normalizar(g.nome) === normalizar(nome));
     for (let tentativa = 1; tentativa <= 6; tentativa++) {
       grupos = await listarGrupos(client);
-      const achados = grupos.filter((g) => normalizar(g.nome) === normalizar(config.grupo));
+      const achados = acharGrupo(config.grupo);
       if (achados.length === 1) {
         grupoId = achados[0].id;
         break;
@@ -124,17 +134,33 @@ client.on('ready', () =>
       await new Promise((r) => setTimeout(r, 5000));
     }
 
+    const lista = grupos.map((g) => `  - ${g.nome}`).join('\n') || '  (nenhum)';
     if (!grupoId) {
-      const lista = grupos.map((g) => `  - ${g.nome}`).join('\n') || '  (nenhum)';
       log(`❌ Grupo "${config.grupo}" não encontrado. Ajuste "grupo" no config.json. Grupos disponíveis:\n${lista}`);
       process.exit(2);
     }
-    log(`👀 Monitorando o grupo "${config.grupo}" (${grupoId})`);
+    log(`👀 Monitorando o grupo de pedidos "${config.grupo}" (${grupoId})`);
 
-    try {
-      await processarHistorico();
-    } catch (e) {
-      log('⚠️  Não foi possível verificar mensagens antigas:', e.message);
+    // Grupo Tratamento de Texto é opcional: sem ele, o sistema segue só com o de pedidos
+    if (config.grupoTratamento) {
+      const achados = acharGrupo(config.grupoTratamento);
+      if (achados.length === 1) {
+        grupoTratamentoId = achados[0].id;
+        log(`👀 Monitorando o grupo de tratamento "${config.grupoTratamento}" (${grupoTratamentoId})`);
+      } else if (achados.length > 1) {
+        log(`⚠️  Existem ${achados.length} grupos chamados "${config.grupoTratamento}". Renomeie um deles. Tratamento de texto DESLIGADO.`);
+      } else {
+        log(`⚠️  Grupo "${config.grupoTratamento}" não encontrado. Tratamento de texto DESLIGADO. Grupos disponíveis:\n${lista}`);
+      }
+    }
+
+    for (const [id, nome] of [[grupoId, config.grupo], [grupoTratamentoId, config.grupoTratamento]]) {
+      if (!id) continue;
+      try {
+        await processarHistorico(id, nome);
+      } catch (e) {
+        log(`⚠️  Não foi possível verificar mensagens antigas de "${nome}":`, e.message);
+      }
     }
     log('🟢 Pronto. Aguardando pedidos...');
   })
@@ -143,29 +169,30 @@ client.on('ready', () =>
 // message_create dispara para mensagens de outros E para as enviadas por esta conta
 client.on('message_create', (msg) => enfileirar(() => tratarMensagem(msg)));
 
-/** Ao iniciar, confere pedidos que chegaram enquanto o sistema estava desligado. */
-async function processarHistorico() {
+/** Ao iniciar, trata mensagens que chegaram enquanto o sistema estava desligado. */
+async function processarHistorico(id, nome) {
   const limite = config.historicoAoIniciar ?? 50;
   if (limite <= 0) return;
-  const grupo = await comTimeout(client.getChatById(grupoId), 60000, 'abrir o grupo');
+  const grupo = await comTimeout(client.getChatById(id), 60000, 'abrir o grupo');
   const mensagens = await comTimeout(grupo.fetchMessages({ limit: limite }), 60000, 'buscar mensagens antigas');
 
-  if (registro.primeiraExecucao) {
-    // Primeira vez: não mexe em pedidos antigos, só marca como vistos
+  if (registro.grupoNovo(id)) {
+    // Primeira vez deste grupo: não mexe em mensagens antigas, só marca como vistas
     mensagens.forEach((m) => registro.marcarProcessado(m.id._serialized));
-    registro.primeiraExecucao = false;
-    log(`ℹ️  Primeira execução: ${mensagens.length} mensagens antigas ignoradas`);
+    registro.marcarGrupo(id);
+    log(`ℹ️  Primeira vez no grupo "${nome}": ${mensagens.length} mensagens antigas ignoradas`);
     return;
   }
 
   const pendentes = mensagens.filter((m) => !registro.jaProcessado(m.id._serialized));
-  if (pendentes.length) log(`🔎 Verificando ${pendentes.length} mensagens recebidas enquanto estava desligado`);
+  if (pendentes.length) log(`🔎 "${nome}": verificando ${pendentes.length} mensagens recebidas enquanto estava desligado`);
   for (const m of pendentes) await tratarMensagem(m);
 }
 
 async function tratarMensagem(msg) {
   if (!grupoId) return;
   const chatId = msg.fromMe ? msg.to : msg.from;
+  if (grupoTratamentoId && chatId === grupoTratamentoId) return tratarTexto(msg);
   if (chatId !== grupoId) return;
 
   const id = msg.id._serialized;
@@ -255,9 +282,8 @@ async function enviarPedido(msgOriginal, resultado, contato) {
   return true;
 }
 
-/** Trata a resposta do grupo a uma pergunta "para quem envio?". */
-async function tratarEscolha(msg) {
-  // Qual pergunta está sendo respondida? Pela mensagem citada; se não citou e só há uma, é ela.
+/** ID da mensagem citada (respondida), ou null. */
+async function idCitado(msg) {
   let citada = msg._data?.quotedStanzaID || null;
   if (!citada && msg.hasQuotedMsg) {
     try {
@@ -266,6 +292,13 @@ async function tratarEscolha(msg) {
       log('⚠️  Não foi possível ler a mensagem citada:', e.message);
     }
   }
+  return citada;
+}
+
+/** Trata a resposta do grupo a uma pergunta "para quem envio?". */
+async function tratarEscolha(msg) {
+  // Qual pergunta está sendo respondida? Pela mensagem citada; se não citou e só há uma, é ela.
+  const citada = await idCitado(msg);
   let chave = citada && escolhasPendentes.has(citada) ? citada : null;
   if (!chave && !citada && escolhasPendentes.size === 1) chave = [...escolhasPendentes.keys()][0];
   if (!chave) {
@@ -313,6 +346,111 @@ async function tratarEscolha(msg) {
   await enviarPedido(pendente.original, pendente.resultado, contato);
 }
 
+// ---------- grupo Tratamento de Texto ----------
+
+/** Mensagem no grupo Tratamento de Texto: resposta a uma pergunta ou pedido novo para montar. */
+async function tratarTexto(msg) {
+  const id = msg.id._serialized;
+  if (msg.type !== 'chat') return;
+  if (enviadosPeloSistema.has(id) || registro.jaProcessado(id)) return;
+  if (config.debug) log(`📨 Tratamento [${msg.fromMe ? 'minha' : 'colega'}] "${String(msg.body).split('\n')[0].slice(0, 60)}"`);
+
+  // Resposta a uma pergunta? Pela citação; sem citação, só se houver uma pergunta aberta
+  // e a mensagem for curta e não parecer um pedido novo.
+  if (pendentesTratamento.size) {
+    const citada = await idCitado(msg);
+    let chave = citada && pendentesTratamento.has(citada) ? citada : null;
+    const curta = !String(msg.body).trim().includes('\n') && !T.pareceItem(msg.body);
+    if (!chave && !citada && pendentesTratamento.size === 1 && curta) chave = [...pendentesTratamento.keys()][0];
+    if (chave) {
+      registro.marcarProcessado(id);
+      await responderTratamento(msg, chave);
+      return;
+    }
+  }
+
+  let produtos;
+  try {
+    produtos = await catalogo.obter();
+  } catch (e) {
+    registro.marcarProcessado(id);
+    await reagir(msg, '⚠️');
+    await responderNoGrupo(msg, `⚠️ *Erro ao ler a planilha de produtos*\n\n• ${e.message}`, grupoTratamentoId);
+    return;
+  }
+
+  let contatos = null;
+  try {
+    contatos = (await listarContatos(client)).map((c) => c.nome).filter(Boolean);
+  } catch (e) {
+    log('⚠️  Não foi possível ler a agenda:', e.message);
+  }
+
+  const rascunhos = T.interpretarTudo(msg.body, produtos, { aprendidos: registro.apelidos, contatos });
+  if (!rascunhos.length) return; // conversa comum, sem itens
+  registro.marcarProcessado(id);
+  log(`🧹 Tratamento: ${rascunhos.length} pedido(s) para montar`);
+  await avancarTratamento({ original: msg, rascunhos });
+}
+
+/** Faz a próxima pergunta pendente ou, se não houver, monta e posta os pedidos no grupo Pedidos. */
+async function avancarTratamento(estado) {
+  for (const r of estado.rascunhos) {
+    const pend = T.proximaPendencia(r);
+    if (!pend) continue;
+    const pergunta = await responderNoGrupo(estado.original, M.mensagemPerguntaTratamento(r, pend), grupoTratamentoId);
+    if (pergunta?.id) pendentesTratamento.set(pergunta.id.id, { ...estado, r, pend });
+    await reagir(estado.original, '❓');
+    log(`❓ Tratamento: pergunta de ${pend.tipo} no grupo`);
+    return;
+  }
+
+  const produtos = await catalogo.obter();
+  const pedidos = estado.rascunhos.flatMap((r) => T.montarPedidos(r, produtos));
+  if (!pedidos.length) {
+    await reagir(estado.original, '🚫');
+    await responderNoGrupo(estado.original, '🚫 Nada para enviar: todos os itens foram retirados.', grupoTratamentoId);
+    return;
+  }
+
+  const postados = [];
+  for (const p of pedidos) {
+    try {
+      await esperarAleatorio();
+      // NÃO entra em enviadosPeloSistema: a conferência do grupo Pedidos precisa ler esta mensagem
+      const enviada = await comTimeout(client.sendMessage(grupoId, p.texto), 60000, 'postar no grupo Pedidos');
+      postados.push(p);
+      if (enviada) enfileirar(() => tratarMensagem(enviada));
+    } catch (e) {
+      log('❌ Falha ao postar no grupo Pedidos:', e.message);
+      await responderNoGrupo(estado.original, `⚠️ Não consegui postar o pedido de ${p.cliente} no grupo Pedidos: ${e.message}`, grupoTratamentoId);
+    }
+  }
+  if (!postados.length) return;
+
+  const ignoradas = estado.rascunhos.flatMap((r) => r.ignoradas);
+  await reagir(estado.original, '✅');
+  await responderNoGrupo(estado.original, M.mensagemConfirmacaoTratamento(postados, ignoradas), grupoTratamentoId);
+  log(`➡️  Tratamento: ${postados.length} pedido(s) postado(s) no grupo Pedidos (${postados.map((p) => p.cliente).join(', ')})`);
+}
+
+/** Aplica a resposta do colega e continua (próxima pergunta ou envio). */
+async function responderTratamento(msg, chave) {
+  const estado = pendentesTratamento.get(chave);
+  const produtos = await catalogo.obter();
+  const res = T.aplicarResposta(estado.r, estado.pend, msg.body, produtos, registro.apelidos);
+  if (!res.ok) {
+    await responderNoGrupo(msg, `❓ ${res.erro}`, grupoTratamentoId);
+    return; // pergunta continua aberta
+  }
+  pendentesTratamento.delete(chave);
+  if (res.apelido) {
+    registro.salvarApelido(res.apelido.termo, res.apelido.nome);
+    log(`🧠 Aprendido: "${res.apelido.termo}" = ${res.apelido.nome}`);
+  }
+  await avancarTratamento({ original: estado.original, rascunhos: estado.rascunhos });
+}
+
 async function reagir(msg, emoji) {
   try {
     await esperarAleatorio(400, 1000);
@@ -322,10 +460,10 @@ async function reagir(msg, emoji) {
   }
 }
 
-async function responderNoGrupo(msg, texto) {
+async function responderNoGrupo(msg, texto, chatId = grupoId) {
   try {
     await esperarAleatorio();
-    const enviada = await comTimeout(msg.reply(texto, grupoId), 60000, 'responder no grupo');
+    const enviada = await comTimeout(msg.reply(texto, chatId), 60000, 'responder no grupo');
     if (enviada?.id) enviadosPeloSistema.add(enviada.id._serialized);
     return enviada;
   } catch (e) {

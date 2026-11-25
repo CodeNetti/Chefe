@@ -2,7 +2,7 @@
 // IMPORTANTE: as mensagens que o sistema posta no grupo NÃO começam com "Cliente:",
 // assim elas nunca são confundidas com um pedido novo.
 
-const { formatarReais, formatarQuantidade } = require('./util');
+const { formatarReais, formatarQtdUnidade } = require('./util');
 
 function aplicarModelo(modelo, vars) {
   return modelo.replace(/\{(\w+)\}/g, (_, chave) => (chave in vars ? vars[chave] : `{${chave}}`));
@@ -10,10 +10,12 @@ function aplicarModelo(modelo, vars) {
 
 /** Lista de itens SEM o código (o cliente vê só o nome do produto). */
 function listaItens(resultado, modeloItem) {
+  // {qtd} já traz a unidade ("2x", "5g"); modelos antigos usavam "{qtd}x"
+  const modelo = String(modeloItem).replace(/\{qtd\}x/g, '{qtd}');
   return resultado.itens
     .map((i) =>
-      aplicarModelo(modeloItem, {
-        qtd: formatarQuantidade(i.quantidade),
+      aplicarModelo(modelo, {
+        qtd: formatarQtdUnidade(i.quantidade, i.unidade),
         nome: i.nome,
         unitario: formatarReais(i.precoUnitario),
         valor: formatarReais(i.valor),
@@ -47,10 +49,11 @@ function mensagemControleGrupo(resultado, destino) {
     '✅ *Pedido conferido — valores corretos*',
     `Cliente: ${resultado.cliente}`,
     `Enviado para: ${destino || resultado.cliente}`,
+    ...(resultado.entrega ? [`Entrega: ${resultado.entrega}`] : []),
     '',
     ...resultado.itens.map(
       (i) =>
-        `${formatarQuantidade(i.quantidade)}x ${i.nome} (${formatarReais(i.precoUnitario)} un.) — ${formatarReais(i.valor)}`
+        `${formatarQtdUnidade(i.quantidade, i.unidade)} ${i.nome} (${formatarReais(i.precoUnitario)} un.) — ${formatarReais(i.valor)}`
     ),
     '',
     `*Total: ${formatarReais(resultado.total)}*`,
@@ -80,7 +83,59 @@ function mensagemEscolhaGrupo(resultado, motivo, opcoes, formatarTelefone) {
   return linhas.join('\n');
 }
 
+// ---------- grupo Tratamento de Texto ----------
+
+function resumoRascunho(r) {
+  return r.itens
+    .filter((i) => !i.removido)
+    .map((i) => `• ${i.quantidade === null ? '?' : formatarQtdUnidade(i.quantidade, i.unidade)} ${i.grupo?.nome || i.termo}`)
+    .join('\n');
+}
+
+/** Pergunta do Tratamento de Texto. pend vem de proximaPendencia(). */
+function mensagemPerguntaTratamento(r, pend) {
+  if (pend.tipo === 'produto') {
+    const it = r.itens[pend.i];
+    const linhas = [`❓ *Não reconheci o produto* "${it.termo}"`, `Linha: ${it.linha}`, ''];
+    if (pend.opcoes.length) {
+      pend.opcoes.forEach((g, n) => linhas.push(`*${n + 1}* — ${g.nome}`));
+      linhas.push('', '_Responda ESTA mensagem com o número da opção, o COD ou o nome do produto. Responda 0 para tirar este item._');
+    } else {
+      linhas.push('_Responda ESTA mensagem com o COD ou o nome do produto como está na planilha. Responda 0 para tirar este item._');
+    }
+    return linhas.join('\n');
+  }
+  if (pend.tipo === 'quantidade') {
+    const it = r.itens[pend.i];
+    return [
+      `❓ *Qual a quantidade de ${it.grupo?.nome || it.termo}?*`,
+      `Linha: ${it.linha}`,
+      '',
+      '_Responda ESTA mensagem com a quantidade (ex.: 5 ou 5g). Responda 0 para tirar este item._',
+    ].join('\n');
+  }
+  const linhas = ['❓ *Para qual cliente é este pedido?*', '', resumoRascunho(r), ''];
+  if (pend.opcoes.length) {
+    pend.opcoes.forEach((o, n) => linhas.push(`*${n + 1}* — ${o}`));
+    linhas.push('');
+  }
+  linhas.push(
+    `_Responda ESTA mensagem com o nome do cliente como está salvo na agenda${pend.opcoes.length ? ' ou com o número da opção' : ''}. Responda 0 para cancelar este pedido._`
+  );
+  return linhas.join('\n');
+}
+
+/** Confirmação no Tratamento de Texto do que foi postado no grupo Pedidos. */
+function mensagemConfirmacaoTratamento(pedidos, ignoradas = []) {
+  const linhas = [`➡️ *${pedidos.length > 1 ? `${pedidos.length} pedidos montados e enviados` : 'Pedido montado e enviado'} ao grupo Pedidos*`];
+  pedidos.forEach((p) => linhas.push('', p.texto));
+  if (ignoradas.length) linhas.push('', `_Linhas ignoradas: ${ignoradas.map((l) => `"${l}"`).join(', ')}_`);
+  return linhas.join('\n');
+}
+
 module.exports = {
+  mensagemPerguntaTratamento,
+  mensagemConfirmacaoTratamento,
   mensagemCliente,
   mensagemErroGrupo,
   mensagemControleGrupo,

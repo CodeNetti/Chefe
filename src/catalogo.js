@@ -1,6 +1,13 @@
 // Carrega a planilha de produtos (COD - Nome - Preço).
 // A planilha é relida automaticamente quando o arquivo é alterado,
 // então dá para atualizar preços sem reiniciar o sistema.
+//
+// Colunas opcionais:
+// - "A partir de": faixas de preço. Cada faixa é uma linha com o MESMO Nome e COD próprio.
+//     1010 | Produto X | A partir de 0  | 80
+//     1020 | Produto X | A partir de 50 | 70
+//   Para uma quantidade, vale a faixa de maior "A partir de" que seja <= quantidade.
+// - "Apelidos": outros nomes do produto, separados por vírgula (usados no grupo Tratamento de Texto).
 
 const fs = require('fs');
 const ExcelJS = require('exceljs');
@@ -10,6 +17,8 @@ const CABECALHOS = {
   codigo: ['cod', 'codigo', 'cod.', 'código'],
   nome: ['nome', 'produto', 'descricao', 'descrição'],
   preco: ['preco', 'preço', 'valor', 'preco unitario', 'preço unitário', 'valor unitario'],
+  apartirDe: ['a partir de', 'apartir de', 'qtd minima', 'quantidade minima', 'minimo', 'faixa'],
+  apelidos: ['apelidos', 'apelido', 'sinonimos', 'outros nomes'],
 };
 
 /** Extrai o valor "puro" de uma célula do ExcelJS (fórmula, rich text, hyperlink...). */
@@ -34,6 +43,13 @@ function identificarColunas(row) {
     }
   });
   return colunas.codigo && colunas.nome && colunas.preco ? colunas : null;
+}
+
+/** "50" | 50 | "50g" | "" -> 50 | null (aceita 0). */
+function lerMinimo(v) {
+  if (v === null || v === undefined || String(v).trim() === '') return null;
+  const m = String(v).replace(',', '.').match(/\d+(?:\.\d+)?/);
+  return m ? Number(m[0]) : null;
 }
 
 async function lerPlanilha(caminho) {
@@ -72,9 +88,36 @@ async function lerPlanilha(caminho) {
       continue;
     }
     if (produtos.has(codigo)) avisos.push(`Linha ${r}: COD ${codigo} duplicado (vale a última linha)`);
-    produtos.set(codigo, { codigo, nome: nome || `COD ${codigo}`, preco });
+    const apartirDe = colunas.apartirDe ? lerMinimo(valorCelula(row.getCell(colunas.apartirDe))) : null;
+    const apelidos = colunas.apelidos
+      ? String(valorCelula(row.getCell(colunas.apelidos)) ?? '')
+          .split(/[,;\n]/)
+          .map((a) => a.trim())
+          .filter(Boolean)
+      : [];
+    produtos.set(codigo, { codigo, nome: nome || `COD ${codigo}`, preco, apartirDe, apelidos });
   }
   return { produtos, avisos };
+}
+
+/** Todas as linhas (faixas) com o mesmo nome do produto. */
+function faixasDe(produtos, nome) {
+  const alvo = normalizar(nome);
+  return [...produtos.values()].filter((p) => normalizar(p.nome) === alvo);
+}
+
+/**
+ * Faixa certa de um produto para a quantidade.
+ * Sem coluna "A partir de" preenchida para esse nome -> o próprio produto.
+ * Quantidade abaixo de todas as faixas -> null.
+ */
+function faixaPara(produtos, produto, quantidade) {
+  const irmaos = faixasDe(produtos, produto.nome);
+  if (!irmaos.some((p) => p.apartirDe !== null && p.apartirDe !== undefined)) return produto;
+  const validas = irmaos
+    .filter((p) => (p.apartirDe ?? 0) <= quantidade)
+    .sort((a, b) => (b.apartirDe ?? 0) - (a.apartirDe ?? 0));
+  return validas[0] ?? null;
 }
 
 class Catalogo {
@@ -98,4 +141,4 @@ class Catalogo {
   }
 }
 
-module.exports = { Catalogo, lerPlanilha };
+module.exports = { Catalogo, lerPlanilha, faixasDe, faixaPara };

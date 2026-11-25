@@ -13,20 +13,39 @@ COMO INICIAR
      e escaneie o codigo.
   5. Pronto. Deixe a janela aberta (pode minimizar).
 
-O GRUPO
-  O sistema monitora o grupo do WhatsApp chamado "Pedidos Teste".
-  O WhatsApp conectado precisa participar desse grupo.
+OS GRUPOS
+  O WhatsApp conectado precisa participar destes dois grupos:
+  - "Pedidos Teste": pedidos no formato certo (abaixo). O sistema
+    confere e envia ao cliente.
+  - "Tratamento de Texto": cole o pedido do jeito que veio (baguncado).
+    O sistema monta o pedido certo e posta sozinho no "Pedidos Teste".
+    Se nao entender algo, ele pergunta no grupo: responda CITANDO a
+    pergunta (0 tira o item ou cancela o pedido).
 
-FORMATO DO PEDIDO NO GRUPO
+FORMATO DO PEDIDO NO GRUPO "Pedidos Teste"
   Cliente: Nome do contato (igual esta salvo na agenda)
   Pedido
   2x - Alface - COD:2121 - R$80,00
-  3x - Tomate - COD:1010 - R$22,50
-  Total: R$102,50
+  5g - Produto X - COD:4010 - R$400,00
+  Entrega: Estacao Central
+  Total: R$480,00
+
+  A quantidade aceita qualquer unidade (2x, 5g, 10m, 1,5kg).
+
+EXEMPLO PARA O GRUPO "Tratamento de Texto"
+  Alias: Maria
+  2 alface
+  60g Produto X
+  delivery: Estacao Central
 
 PRODUTOS E PRECOS
   Edite o arquivo "produtos.xlsx" (colunas COD, Nome e Preco).
   Pode editar com o sistema ligado.
+  Colunas opcionais:
+  - "A partir de": faixa de preco. Repita o produto com o MESMO
+    nome e outro COD. Ex.: Produto X, a partir de 0 = 80 (COD 4010);
+    Produto X, a partir de 50 = 70 (COD 4020).
+  - "Apelidos": outros nomes do produto, separados por virgula.
 
 RELATORIO
   Cada conferencia fica registrada na pasta "resultados"

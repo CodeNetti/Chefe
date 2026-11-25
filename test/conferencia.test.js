@@ -15,7 +15,7 @@ const config = {
   toleranciaCentavos: 0,
   exigirTotal: false,
   mensagemCliente: 'Olá, {cliente}!\n\n{itens}\n\nTotal: {total}',
-  modeloItem: '{qtd}x {nome} — {valor}',
+  modeloItem: '{qtd}x {nome} — {valor}', // modelo antigo continua funcionando
 };
 
 let produtos;
@@ -23,9 +23,47 @@ test('carrega planilha exemplo', async () => {
   const arq = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'ddc-')), 'p.xlsx');
   await criar(arq);
   ({ produtos } = await lerPlanilha(arq));
-  assert.strictEqual(produtos.size, 3);
-  assert.deepStrictEqual(produtos.get('2121'), { codigo: '2121', nome: 'Alface', preco: 4000 });
+  assert.strictEqual(produtos.size, 5);
+  assert.deepStrictEqual(produtos.get('2121'), { codigo: '2121', nome: 'Alface', preco: 4000, apartirDe: null, apelidos: ['alface crespa'] });
   assert.strictEqual(produtos.get('3030').preco, 525);
+  assert.strictEqual(produtos.get('4020').apartirDe, 50);
+});
+
+test('quantidade com qualquer unidade (o que vale é o número)', () => {
+  const casos = [
+    ['5g - Alface - COD:2121 - R$200', 5, 'g'],
+    ['10 m - Alface - COD:2121 - R$400', 10, 'm'],
+    ['1,5kg - Alface - COD:2121 - R$60', 1.5, 'kg'],
+    ['2x - Alface - COD:2121 - R$80', 2, 'x'],
+    ['3 - Alface - COD:2121 - R$120', 3, 'x'],
+    ['2 Alface COD:2121 R$80', 2, 'x'],
+  ];
+  for (const [linha, qtd, un] of casos) {
+    const p = parsePedido(`Cliente: Ana\n${linha}`);
+    assert.deepStrictEqual(p.erros, [], linha);
+    assert.strictEqual(p.itens[0].quantidade, qtd, linha);
+    assert.strictEqual(p.itens[0].unidade, un, linha);
+    assert.ok(conferir(p, produtos, config).ok, linha);
+  }
+  const r = conferir(parsePedido('Cliente: Ana\n5g - Alface - COD:2121 - R$200'), produtos, config);
+  assert.match(M.mensagemCliente(r, config), /^5g Alface — R\$ 200,00$/m);
+  assert.match(M.mensagemControleGrupo(r, 'Ana'), /5g Alface/);
+});
+
+test('linha Entrega é aceita e aparece no resumo do grupo', () => {
+  const p = parsePedido('Cliente: Ana\n2x - Alface - COD:2121 - R$80\nEntrega: Station Place1');
+  assert.deepStrictEqual(p.erros, []);
+  const r = conferir(p, produtos, config);
+  assert.ok(r.ok);
+  assert.match(M.mensagemControleGrupo(r, 'Ana'), /Entrega: Station Place1/);
+});
+
+test('faixas de preço: COD da faixa certa passa, da faixa errada é apontado', () => {
+  assert.ok(conferir(parsePedido('Cliente: Ana\n10g - Produto X - COD:4010 - R$800'), produtos, config).ok);
+  assert.ok(conferir(parsePedido('Cliente: Ana\n60g - Produto X - COD:4020 - R$4.200'), produtos, config).ok);
+  const r = conferir(parsePedido('Cliente: Ana\n60g - Produto X - COD:4010 - R$4.800'), produtos, config);
+  assert.strictEqual(r.ok, false);
+  assert.match(r.erros[0], /60g de Produto X é da faixa COD 4020 \(R\$ 70,00 un\.\), mas o pedido usou COD 4010/);
 });
 
 test('valores em reais', () => {

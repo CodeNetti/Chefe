@@ -1,12 +1,14 @@
 // Confere um pedido (já lido pelo parser) contra a planilha de produtos.
 // Regra: quantidade × preço da planilha = valor informado na linha.
 // Se houver linha "Total", a soma dos itens também precisa bater.
+// Com faixas de preço (coluna "A partir de"), o COD usado precisa ser o da faixa da quantidade.
 
-const { normalizarCodigo, formatarReais, formatarQuantidade } = require('./util');
+const { normalizarCodigo, formatarReais, formatarQuantidade, formatarQtdUnidade } = require('./util');
+const { faixaPara } = require('./catalogo');
 
 /**
  * @param pedido   resultado de parsePedido()
- * @param produtos Map<codigo, {codigo, nome, preco}>
+ * @param produtos Map<codigo, {codigo, nome, preco, apartirDe}>
  * @param opcoes   { toleranciaCentavos, exigirTotal }
  */
 function conferir(pedido, produtos, opcoes = {}) {
@@ -17,24 +19,39 @@ function conferir(pedido, produtos, opcoes = {}) {
 
   for (const item of pedido.itens) {
     const codigo = normalizarCodigo(item.codigo);
-    const produto = produtos.get(codigo);
-    if (!produto) {
+    const informado = produtos.get(codigo);
+    if (!informado) {
       erros.push(`COD ${codigo} não existe na planilha ("${item.linha}")`);
       continue;
     }
 
+    const qtdTexto = formatarQtdUnidade(item.quantidade, item.unidade);
+    const faixa = faixaPara(produtos, informado, item.quantidade);
+    if (!faixa) {
+      erros.push(`${qtdTexto} de ${informado.nome}: quantidade abaixo da menor faixa da planilha`);
+      continue;
+    }
+    const produto = faixa;
+    if (faixa.codigo !== codigo) {
+      erros.push(
+        `${qtdTexto} de ${informado.nome} é da faixa COD ${faixa.codigo} (${formatarReais(faixa.preco)} un.), ` +
+          `mas o pedido usou COD ${codigo} (${formatarReais(informado.preco)} un.)`
+      );
+    }
+
     const esperado = Math.round(item.quantidade * produto.preco);
     totalCalculado += esperado;
-    if (Math.abs(esperado - item.valorInformado) > tolerancia) {
+    if (faixa.codigo === codigo && Math.abs(esperado - item.valorInformado) > tolerancia) {
       erros.push(
-        `${formatarQuantidade(item.quantidade)}x ${produto.nome}: informado ${formatarReais(item.valorInformado)}, ` +
+        `${qtdTexto} ${produto.nome}: informado ${formatarReais(item.valorInformado)}, ` +
           `correto ${formatarReais(esperado)} (${formatarQuantidade(item.quantidade)} × ${formatarReais(produto.preco)})`
       );
     }
 
     itens.push({
       quantidade: item.quantidade,
-      codigo,
+      unidade: item.unidade,
+      codigo: produto.codigo,
       nome: produto.nome,
       precoUnitario: produto.preco,
       valor: esperado,
@@ -52,6 +69,7 @@ function conferir(pedido, produtos, opcoes = {}) {
   return {
     ok: erros.length === 0,
     cliente: pedido.cliente,
+    entrega: pedido.entrega ?? null,
     itens,
     total: totalCalculado,
     erros,

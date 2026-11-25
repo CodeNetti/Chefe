@@ -45,12 +45,42 @@ Total: R$102,50
 
 - **1ª linha:** `Cliente:` seguido do nome **exatamente como está salvo na agenda** do WhatsApp (acentos e maiúsculas não importam).
 - **Valor de cada item:** é o total da linha (quantidade × preço unitário).
-- **Opcionais:** o nome do produto no item (a conferência usa só o COD), a linha `Pedido` e a linha `Total`.
-- **Quantidade:** aceita decimal, por exemplo `1,5x`.
+- **Opcionais:** o nome do produto no item (a conferência usa só o COD), a linha `Pedido`, a linha `Entrega: ...` e a linha `Total`.
+- **Quantidade:** aceita qualquer unidade (`2x`, `5g`, `10m`, `1,5kg`, `3`). A conta usa só o número; a unidade aparece na mensagem ao cliente (`5g Queijo — R$ ...`).
+
+## Grupo Tratamento de Texto (pedidos bagunçados)
+
+Cole no grupo **Tratamento de Texto** (`grupoTratamento` no `config.json`) o pedido do jeito que veio. O sistema monta o pedido no formato acima e **posta sozinho no grupo de pedidos**, onde ele é conferido normalmente.
+
+Exemplos que ele entende:
+
+```
+SUMMARY XKTP              Alias: Person1          10g ItemD - 270,00
+1g ItemA - 75             Order:                  3g ItemB - 219,00
+8g ItemB - 70             1g ItemF                Total R$ 708,00
+5g ItemE                  Total: 25$              Person3
+total : 75+560+115=750                            Station Place1
+pickup/station
+```
+
+- **Cliente:** `Alias: X`, `alias X`, `Cliente: X`, `Summary X`, um nome sozinho numa linha, ou `... para X` no fim de cada item (um cliente por linha).
+- **Itens:** quantidade + produto + valor opcional. O produto é achado pelo nome da planilha (aceita plural, erro de digitação e a coluna **Apelidos**) ou pelo COD.
+- **Valor ao lado do item:** pode ser o preço por unidade ou o total da linha; o sistema escolhe o que fecha com o Total.
+- **Entrega:** linhas com `station`, `delivery`, `entrega`, `pickup`... viram `Entrega:` no pedido.
+- **Colagem de várias mensagens** (`[21:37, 24/11/2026] Fulano: ...`) vira um pedido por mensagem.
+- **Quando não entende** (produto desconhecido ou ambíguo, cliente faltando), pergunta no próprio grupo. **Responda citando a pergunta** (com uma só aberta, não precisa citar). `0` tira o item ou cancela o pedido.
+- **Aprende:** quando você diz qual produto era uma palavra desconhecida, ela vira apelido (`estado/apelidos.json`) e não é perguntada de novo.
 
 ## Planilha de produtos
 
 O arquivo é `produtos.xlsx`, com as colunas **COD**, **Nome** e **Preço** na primeira aba. Pode ser editado com o sistema rodando, porque ele recarrega o arquivo sozinho quando há alteração.
+
+Colunas opcionais:
+
+| Coluna | Para que serve |
+|---|---|
+| **A partir de** | Faixas de preço. Cada faixa é uma linha com o **mesmo Nome** e COD próprio. Vale a faixa de maior "A partir de" que caiba na quantidade. Ex.: `4010 · Produto X · 0 · 80` e `4020 · Produto X · 50 · 70` → até 49g usa 4010, a partir de 50g usa 4020. Na conferência, COD da faixa errada é apontado como erro. |
+| **Apelidos** | Outros nomes do produto, separados por vírgula, usados no grupo Tratamento de Texto. |
 
 Para gerar uma planilha de exemplo, use `npm run exemplo`.
 
@@ -71,7 +101,8 @@ iniciar.bat
 
 | Campo | Para que serve |
 |---|---|
-| `grupo` | Nome do grupo monitorado. |
+| `grupo` | Nome do grupo de pedidos (formato certo, conferência). |
+| `grupoTratamento` | Nome do grupo onde se colam pedidos bagunçados. Vazio = desligado. |
 | `planilhaProdutos` | Caminho da planilha. |
 | `exigirTotal` | `true` faz a linha `Total` ser obrigatória. |
 | `toleranciaCentavos` | Diferença aceita por arredondamento. `0` = exato. |
@@ -82,7 +113,7 @@ iniciar.bat
 | `chromePath` | Caminho de um Chrome instalado. Se ficar vazio, usa o Chrome que vem com o sistema. |
 | `chavePix` | Chave Pix para recebimento, inserida em `{pix}`. |
 | `mensagemCliente` | Modelo da mensagem enviada ao cliente. Aceita `{cliente}`, `{itens}`, `{total}` e `{pix}`. |
-| `modeloItem` | Modelo de cada item. Aceita `{qtd}`, `{nome}`, `{unitario}` e `{valor}`. |
+| `modeloItem` | Modelo de cada item. Aceita `{qtd}` (já com a unidade: `2x`, `5g`), `{nome}`, `{unitario}` e `{valor}`. |
 
 ## Relatório
 

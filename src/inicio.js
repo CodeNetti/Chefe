@@ -70,8 +70,15 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`  ${cinza('Grupo monitorado:')} ${amarelo(config.grupo)}`);
-  console.log(`  ${cinza('Planilha:')}         ${amarelo(config.planilhaProdutos)}`);
+  // Configs da versão 1 não têm o grupo de tratamento: acrescenta o padrão
+  if (!('grupoTratamento' in config)) {
+    config.grupoTratamento = 'Tratamento de Texto';
+    fs.writeFileSync(ARQ_CONFIG, JSON.stringify(config, null, 2) + '\n');
+  }
+
+  console.log(`  ${cinza('Grupo de pedidos:')}    ${amarelo(config.grupo)}`);
+  console.log(`  ${cinza('Grupo de tratamento:')} ${config.grupoTratamento ? amarelo(config.grupoTratamento) : cinza('(desligado)')}`);
+  console.log(`  ${cinza('Planilha:')}            ${amarelo(config.planilhaProdutos)}`);
   console.log('');
 
   // Sem teclado (ex.: rodando em segundo plano): segue com o que já está salvo

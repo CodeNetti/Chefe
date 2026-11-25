@@ -3,23 +3,57 @@
 // - resultados/conferencias_AAAA-MM.csv  -> abre no Excel (separador ";")
 // - estado/processados.json              -> IDs de mensagens já tratadas, para não
 //                                           processar o mesmo pedido duas vezes
+// - estado/grupos.json                   -> grupos já vistos (na 1ª vez de um grupo, as
+//                                           mensagens antigas dele são ignoradas)
+// - estado/apelidos.json                 -> nomes de produto aprendidos com as respostas
+//                                           no grupo Tratamento de Texto
 
 const fs = require('fs');
 const path = require('path');
-const { agora, formatarReais, log } = require('./util');
+const { agora, formatarReais, formatarQtdUnidade, log } = require('./util');
+
+function lerJson(arquivo, padrao) {
+  try {
+    return fs.existsSync(arquivo) ? JSON.parse(fs.readFileSync(arquivo, 'utf8')) : padrao;
+  } catch (e) {
+    log(`⚠️  Não foi possível ler ${path.basename(arquivo)}: ${e.message}`);
+    return padrao;
+  }
+}
 
 class Registro {
   constructor(raiz) {
     this.pastaResultados = path.join(raiz, 'resultados');
     this.pastaEstado = path.join(raiz, 'estado');
     this.arquivoEstado = path.join(this.pastaEstado, 'processados.json');
+    this.arquivoGrupos = path.join(this.pastaEstado, 'grupos.json');
+    this.arquivoApelidos = path.join(this.pastaEstado, 'apelidos.json');
     fs.mkdirSync(this.pastaResultados, { recursive: true });
     fs.mkdirSync(this.pastaEstado, { recursive: true });
 
-    this.primeiraExecucao = !fs.existsSync(this.arquivoEstado);
-    this.processados = new Set(
-      this.primeiraExecucao ? [] : JSON.parse(fs.readFileSync(this.arquivoEstado, 'utf8'))
-    );
+    this.processados = new Set(lerJson(this.arquivoEstado, []));
+    this.grupos = new Set(lerJson(this.arquivoGrupos, []));
+    this.apelidos = lerJson(this.arquivoApelidos, {}); // termo normalizado -> nome do produto
+  }
+
+  /** true na primeira vez que o grupo aparece (mensagens antigas dele devem ser ignoradas). */
+  grupoNovo(id) {
+    return !this.grupos.has(id);
+  }
+
+  marcarGrupo(id) {
+    if (this.grupos.has(id)) return;
+    this.grupos.add(id);
+    fs.writeFileSync(this.arquivoGrupos, JSON.stringify([...this.grupos]));
+  }
+
+  salvarApelido(termo, nomeProduto) {
+    this.apelidos[termo] = nomeProduto;
+    try {
+      fs.writeFileSync(this.arquivoApelidos, JSON.stringify(this.apelidos, null, 2));
+    } catch (e) {
+      log(`⚠️  Não foi possível salvar o apelido: ${e.message}`);
+    }
   }
 
   jaProcessado(id) {
@@ -42,7 +76,7 @@ class Registro {
       `conferencias_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}.csv`
     );
     const celula = (v) => `"${String(v ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' | ')}"`;
-    const itens = (resultado?.itens ?? []).map((i) => `${i.quantidade}x ${i.nome}`).join(', ');
+    const itens = (resultado?.itens ?? []).map((i) => `${formatarQtdUnidade(i.quantidade, i.unidade)} ${i.nome}`).join(', ');
     const linha = [
       agora(),
       status,

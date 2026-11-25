@@ -57,6 +57,11 @@ function formatarQuantidade(qtd) {
   return String(qtd).replace('.', ',');
 }
 
+/** (2, "x") -> "2x" | (5, "g") -> "5g" | (1.5, "kg") -> "1,5kg". Sem unidade, usa "x". */
+function formatarQtdUnidade(qtd, unidade) {
+  return `${formatarQuantidade(qtd)}${unidade || 'x'}`;
+}
+
 function esperar(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -81,6 +86,7 @@ module.exports = {
   paraQuantidade,
   formatarReais,
   formatarQuantidade,
+  formatarQtdUnidade,
   esperar,
   esperarAleatorio,
   agora,

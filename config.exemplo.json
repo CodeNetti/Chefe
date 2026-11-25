@@ -1,5 +1,6 @@
 {
   "grupo": "Pedidos Teste",
+  "grupoTratamento": "Tratamento de Texto",
   "planilhaProdutos": "./produtos.xlsx",
   "exigirTotal": false,
   "toleranciaCentavos": 0,
@@ -10,5 +11,5 @@
   "debug": false,
   "chavePix": "",
   "mensagemCliente": "Olá, {cliente}! Seu pedido foi conferido ✅\n\n{itens}\n\n*Total: {total}*\n\nPara pagamento, use a chave Pix abaixo:\n{pix}",
-  "modeloItem": "{qtd}x {nome} — {valor}"
+  "modeloItem": "{qtd} {nome} — {valor}"
 }
