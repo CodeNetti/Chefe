@@ -24,7 +24,7 @@ const { resolverDestino, contatoPorNumero, formatarTelefone } = require('./conta
 const { Registro } = require('./registro');
 const M = require('./mensagens');
 const { log, normalizar, esperarAleatorio } = require('./util');
-const { comTimeout, listarGrupos, listarContatos } = require('./whatsapp');
+const { comTimeout, listarGrupos, listarContatos, escolherGrupo, explicarErroGrupo } = require('./whatsapp');
 const T = require('./tratamento');
 const { criarLicenca, CODIGO_SAIDA_BLOQUEADO, INTERVALO_VERIFICACAO_MS } = require('./licenca');
 
@@ -120,38 +120,32 @@ client.on('ready', () =>
 
     // A lista de conversas pode demorar alguns segundos para carregar após conectar
     let grupos = [];
-    const acharGrupo = (nome) => grupos.filter((g) => normalizar(g.nome) === normalizar(nome));
+    let escolha = null;
     for (let tentativa = 1; tentativa <= 6; tentativa++) {
       grupos = await listarGrupos(client);
-      const achados = acharGrupo(config.grupo);
-      if (achados.length === 1) {
-        grupoId = achados[0].id;
-        break;
-      }
-      if (achados.length > 1) {
-        log(`❌ Existem ${achados.length} grupos chamados "${config.grupo}". Renomeie um deles.`);
-        process.exit(2);
-      }
+      escolha = escolherGrupo(grupos, config.grupo);
+      if (escolha.grupo || escolha.erro === 'duplicado') break;
       await new Promise((r) => setTimeout(r, 5000));
     }
 
-    const lista = grupos.map((g) => `  - ${g.nome}`).join('\n') || '  (nenhum)';
-    if (!grupoId) {
-      log(`❌ Grupo "${config.grupo}" não encontrado. Ajuste "grupo" no config.json. Grupos disponíveis:\n${lista}`);
+    const lista = grupos.filter((g) => !g.somenteLeitura).map((g) => `  - ${g.nome}`).join('\n') || '  (nenhum)';
+    if (!escolha.grupo) {
+      log(`❌ ${explicarErroGrupo(escolha, config.grupo)} Ajuste "grupo" no config.json. Grupos disponíveis:\n${lista}`);
       process.exit(2);
     }
+    grupoId = escolha.grupo.id;
+    if (escolha.ignorados) log(`ℹ️  ${escolha.ignorados} grupo(s) antigo(s) "${config.grupo}" ignorado(s): somente leitura (você saiu ou foi removido).`);
     log(`👀 Monitorando o grupo de pedidos "${config.grupo}" (${grupoId})`);
 
     // Grupo Tratamento de Texto é opcional: sem ele, o sistema segue só com o de pedidos
     if (config.grupoTratamento) {
-      const achados = acharGrupo(config.grupoTratamento);
-      if (achados.length === 1) {
-        grupoTratamentoId = achados[0].id;
+      const t = escolherGrupo(grupos, config.grupoTratamento);
+      if (t.grupo) {
+        grupoTratamentoId = t.grupo.id;
+        if (t.ignorados) log(`ℹ️  ${t.ignorados} grupo(s) antigo(s) "${config.grupoTratamento}" ignorado(s): somente leitura.`);
         log(`👀 Monitorando o grupo de tratamento "${config.grupoTratamento}" (${grupoTratamentoId})`);
-      } else if (achados.length > 1) {
-        log(`⚠️  Existem ${achados.length} grupos chamados "${config.grupoTratamento}". Renomeie um deles. Tratamento de texto DESLIGADO.`);
       } else {
-        log(`⚠️  Grupo "${config.grupoTratamento}" não encontrado. Tratamento de texto DESLIGADO. Grupos disponíveis:\n${lista}`);
+        log(`⚠️  ${explicarErroGrupo(t, config.grupoTratamento)} Tratamento de texto DESLIGADO. Grupos disponíveis:\n${lista}`);
       }
     }
 
@@ -202,6 +196,7 @@ async function tratarMensagem(msg) {
   }
   if (msg.type !== 'chat') return;
   if (enviadosPeloSistema.has(id) || registro.jaProcessado(id)) return;
+  if (msg.fromMe && M.ehMensagemDoSistema(msg.body)) return; // resposta do próprio sistema
 
   // Resposta a uma pergunta "para quem envio?" (número da opção ou telefone)
   if (RE_ESCOLHA.test(msg.body) && escolhasPendentes.size) {
@@ -354,6 +349,8 @@ async function tratarTexto(msg) {
   const id = msg.id._serialized;
   if (msg.type !== 'chat') return;
   if (enviadosPeloSistema.has(id) || registro.jaProcessado(id)) return;
+  // Confirmação/pergunta do próprio sistema: relida após reiniciar, viraria pedido repetido
+  if (msg.fromMe && M.ehMensagemDoSistema(msg.body)) return;
   if (config.debug) log(`📨 Tratamento [${msg.fromMe ? 'minha' : 'colega'}] "${String(msg.body).split('\n')[0].slice(0, 60)}"`);
 
   // Resposta a uma pergunta? Pela citação; sem citação, só se houver uma pergunta aberta
@@ -465,7 +462,10 @@ async function responderNoGrupo(msg, texto, chatId = grupoId) {
   try {
     await esperarAleatorio();
     const enviada = await comTimeout(msg.reply(texto, chatId), 60000, 'responder no grupo');
-    if (enviada?.id) enviadosPeloSistema.add(enviada.id._serialized);
+    if (enviada?.id) {
+      enviadosPeloSistema.add(enviada.id._serialized);
+      registro.marcarProcessado(enviada.id._serialized); // em disco: não relê após reiniciar
+    }
     return enviada;
   } catch (e) {
     log('⚠️  Não foi possível responder no grupo:', e.message);

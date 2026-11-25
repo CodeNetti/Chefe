@@ -135,7 +135,21 @@ function mensagemConfirmacaoTratamento(pedidos, ignoradas = []) {
   return linhas.join('\n');
 }
 
+// Toda mensagem que o sistema posta nos grupos começa com uma destas marcas
+const MARCAS_SISTEMA = ['➡️', '➡', '❓', '⚠️', '⚠', '🚫', '✅', '❌'];
+
+/**
+ * A mensagem é uma resposta/confirmação postada pelo próprio sistema?
+ * (Só faz sentido para mensagens desta conta: msg.fromMe.) A confirmação do Tratamento de Texto
+ * traz "Cliente:" e os itens; relida após reiniciar, viraria um pedido novo (bug de 25/11/2026).
+ */
+function ehMensagemDoSistema(texto) {
+  const t = String(texto ?? '').trimStart();
+  return MARCAS_SISTEMA.some((m) => t.startsWith(m));
+}
+
 module.exports = {
+  ehMensagemDoSistema,
   mensagemPerguntaTratamento,
   mensagemConfirmacaoTratamento,
   mensagemCliente,

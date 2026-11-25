@@ -6,6 +6,8 @@
 // nunca retorna (foi o que travou o sistema no primeiro teste).
 // Aqui lemos só o que precisamos direto da memória da página, sem rede.
 
+const { normalizar } = require('./util');
+
 /** Rejeita a promessa se ela demorar mais que `ms`. */
 function comTimeout(promessa, ms, rotulo) {
   let timer;
@@ -15,7 +17,10 @@ function comTimeout(promessa, ms, rotulo) {
   return Promise.race([promessa, limite]).finally(() => clearTimeout(timer));
 }
 
-/** [{ id, nome }] de todos os grupos carregados. */
+/**
+ * [{ id, nome, somenteLeitura }] de todos os grupos carregados.
+ * somenteLeitura = não dá para enviar mensagem (você saiu / foi removido, ou só admins falam).
+ */
 async function listarGrupos(client) {
   return comTimeout(
     client.pupPage.evaluate(() =>
@@ -23,11 +28,32 @@ async function listarGrupos(client) {
         .require('WAWebCollections')
         .Chat.getModelsArray()
         .filter((c) => c.id && c.id.server === 'g.us')
-        .map((c) => ({ id: c.id._serialized, nome: c.formattedTitle || c.name || '' }))
+        .map((c) => ({ id: c.id._serialized, nome: c.formattedTitle || c.name || '', somenteLeitura: !!c.isReadOnly }))
     ),
     30000,
     'listar grupos'
   );
+}
+
+/**
+ * Escolhe o grupo pelo nome (sem diferenciar maiúsculas/acentos), ignorando os de somente leitura:
+ * um grupo de onde você saiu continua na lista de conversas com o mesmo nome.
+ * -> { grupo } | { erro: 'nao_encontrado' | 'somente_leitura' | 'duplicado', quantidade? }
+ */
+function escolherGrupo(grupos, nome) {
+  const alvo = normalizar(nome);
+  const mesmoNome = grupos.filter((g) => normalizar(g.nome) === alvo);
+  const ativos = mesmoNome.filter((g) => !g.somenteLeitura);
+  if (ativos.length === 1) return { grupo: ativos[0], ignorados: mesmoNome.length - 1 };
+  if (ativos.length > 1) return { erro: 'duplicado', quantidade: ativos.length };
+  return { erro: mesmoNome.length ? 'somente_leitura' : 'nao_encontrado' };
+}
+
+/** Texto do erro de escolherGrupo para o terminal. */
+function explicarErroGrupo(r, nome) {
+  if (r.erro === 'duplicado') return `Existem ${r.quantidade} grupos ativos chamados "${nome}". Renomeie um deles.`;
+  if (r.erro === 'somente_leitura') return `O grupo "${nome}" existe, mas este WhatsApp não pode enviar mensagens nele (saiu do grupo, foi removido ou só admins falam).`;
+  return `Grupo "${nome}" não encontrado.`;
 }
 
 /** [{ id, nome, pushname, numero }] dos contatos salvos na agenda. */
@@ -56,4 +82,4 @@ async function listarContatos(client) {
   );
 }
 
-module.exports = { comTimeout, listarGrupos, listarContatos };
+module.exports = { comTimeout, listarGrupos, listarContatos, escolherGrupo, explicarErroGrupo };
